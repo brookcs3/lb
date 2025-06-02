@@ -27,7 +27,7 @@
     const bpmDisplay = document.getElementById('bpm');
 
     let audioContext, sourceNode, audioBuffer, intervalId;
-    const tracker = new BeatTracker();
+    const  tracker = new BeatTracker();
     let stableBpm = null, lastBpm = null, sameCount = 0;
 
     fileInput.addEventListener('change', async (e) => {
@@ -65,7 +65,7 @@
         sourceNode.connect(audioContext.destination);
         sourceNode.start();
 
-        // Get audio data from first channel
+        // Get audio data from the first channel
         const audioData = audioBuffer.getChannelData(0);
         
         // Check if we have valid audio data
@@ -75,8 +75,10 @@
           firstFewSamples: audioData.slice(0, 5)
         });
 
-        // Try to detect BPM using beat_track function
-        const { tempo, beats } = beat_track(audioData, audioBuffer.sampleRate, {
+        // Try to detect BPM using the tracker instance
+        const { tempo, beats } = tracker.beatTrack({
+          y: audioData,
+          sr: audioBuffer.sampleRate,
           hopLength: 512,
           units: 'time',
           sparse: true
@@ -89,7 +91,20 @@
         });
 
         if (tempo) {
-          bpmDisplay.textContent = `BPM: ${typeof tempo === 'number' ? tempo.toFixed(2) : 'Invalid tempo'}`;
+          // Stabilize BPM reading
+          if (lastBpm === tempo) {
+            sameCount++;
+            if (sameCount >= 3 && !stableBpm) {
+              stableBpm = tempo;
+            }
+          } else {
+            lastBpm = tempo;
+            sameCount = 1;
+          }
+
+          // Display stable BPM if available, otherwise show current
+          const displayBpm = stableBpm || tempo;
+          bpmDisplay.textContent = `BPM: ${typeof displayBpm === 'number' ? displayBpm.toFixed(2) : 'Invalid tempo'}`;
         } else {
           bpmDisplay.textContent = 'BPM: No tempo detected';
         }
