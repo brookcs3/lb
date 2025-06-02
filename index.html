@@ -21,6 +21,9 @@
         const timestamp = new Date().toLocaleTimeString();
         logOutput.textContent += `[${timestamp}] ${message}\n`;
         logOutput.scrollTop = logOutput.scrollHeight;
+        
+        // Also log to console for debugging
+        console.log(`[${timestamp}] ${message}`);
       }
 
       function clearLog() {
@@ -125,41 +128,53 @@
           const analysisTime = (performance.now() - startTime) / 1000;
 
           if (result.success) {
-            const { times, tempo, globalTempo, confidence } = result;
+            const { times, tempo, globalTempo, confidence, candidates } = result;
             
             logMessage(`✅ Analysis completed in ${analysisTime.toFixed(1)}s`);
             logMessage(`🎯 GLOBAL TEMPO: ${globalTempo.toFixed(1)} BPM (${(confidence * 100).toFixed(1)}% confidence)`);
+            
+            // Show all global candidates
+            logMessage(`🏆 Final global tempo candidates:`);
+            for (let i = 0; i < Math.min(candidates.length, 5); i++) {
+              const candidate = candidates[i];
+              const isWinner = Math.abs(candidate.bpm - globalTempo) < 0.1 ? "👑" : "";
+              logMessage(`   ${i+1}. ${candidate.bpm.toFixed(1)} BPM (score: ${(candidate.boostedScore || candidate.score).toFixed(4)}) ${isWinner}`);
+            }
             
             // Calculate tempo stability
             const deviations = tempo.map(t => Math.abs(t - globalTempo));
             const avgDeviation = deviations.reduce((a, b) => a + b, 0) / deviations.length;
             const maxDeviation = Math.max(...deviations);
             
-            logMessage(`📊 Tempo stability: ±${avgDeviation.toFixed(1)} BPM average, ±${maxDeviation.toFixed(1)} BPM max`);
+            logMessage(`📊 TEMPO STABILITY ANALYSIS:`);
+            logMessage(`   Average deviation: ±${avgDeviation.toFixed(1)} BPM`);
+            logMessage(`   Maximum deviation: ±${maxDeviation.toFixed(1)} BPM`);
+            logMessage(`   Stability windows: ${tempo.filter(t => Math.abs(t - globalTempo) < 3).length}/${tempo.length} stable (±3 BPM)`);
             
-            // Show first few readings to demonstrate consistency
-            logMessage(`🎵 Local tempo readings (should be consistent):`);
-            for (let i = 0; i < Math.min(times.length, 8); i++) {
-              const deviation = Math.abs(tempo[i] - globalTempo);
-              const status = deviation < 5 ? "✅" : deviation < 10 ? "⚠️" : "❌";
-              logMessage(`  [${i}] t=${times[i].toFixed(1)}s → ${tempo[i].toFixed(1)} BPM ${status}`);
-            }
-
-            if (tempo.length > 8) {
-              logMessage(`  ... and ${tempo.length - 8} more readings`);
-            }
+            // Show stability per window (already shown during analysis)
+            logMessage(`📈 WINDOW-BY-WINDOW SUMMARY:`);
+            const stableCount = tempo.filter(t => Math.abs(t - globalTempo) < 3).length;
+            const moderateCount = tempo.filter(t => Math.abs(t - globalTempo) >= 3 && Math.abs(t - globalTempo) < 8).length;
+            const unstableCount = tempo.filter(t => Math.abs(t - globalTempo) >= 8).length;
+            
+            logMessage(`   ✅ Stable (±3 BPM): ${stableCount} windows`);
+            logMessage(`   ⚠️ Moderate (3-8 BPM): ${moderateCount} windows`);
+            logMessage(`   ❌ Unstable (>8 BPM): ${unstableCount} windows`);
 
             // Final BPM display
             const stabilityStatus = avgDeviation < 3 ? "STABLE" : avgDeviation < 8 ? "MODERATE" : "UNSTABLE";
             bpmDisplay.textContent = `BPM: ${globalTempo.toFixed(1)} (${stabilityStatus})`;
             
+            logMessage(`🎉 FINAL RESULT:`);
             if (confidence > 0.7) {
-              logMessage(`🎉 High confidence result! This track is likely ${globalTempo.toFixed(1)} BPM`);
+              logMessage(`   🎯 HIGH CONFIDENCE: This track is ${globalTempo.toFixed(1)} BPM`);
             } else if (confidence > 0.4) {
-              logMessage(`⚠️ Moderate confidence. Track might be ${globalTempo.toFixed(1)} BPM`);
+              logMessage(`   ⚠️ MODERATE CONFIDENCE: Track is likely ${globalTempo.toFixed(1)} BPM`);
             } else {
-              logMessage(`❓ Low confidence. This might be a complex or ambiguous tempo track`);
+              logMessage(`   ❓ LOW CONFIDENCE: Complex/ambiguous tempo, best guess ${globalTempo.toFixed(1)} BPM`);
             }
+            
+            logMessage(`   📊 Overall stability: ${stabilityStatus} (±${avgDeviation.toFixed(1)} BPM average)`);
           } else {
             throw new Error(result.error);
           }
@@ -178,23 +193,35 @@
       async function analyzeWithProgress(y, sr, windowSize, hopSize) {
         try {
           logMessage(`🎵 Step 1: Computing onset strength for entire track...`);
+          logMessage(`📊 Track info: ${y.length.toLocaleString()} samples, ${(y.length/sr).toFixed(1)}s duration`);
           
           // First, get onset strength for the ENTIRE track (not windowed)
           const onsetEnvelope = await computeOnsetStrength(y, sr);
           
           logMessage(`✅ Onset envelope computed: ${onsetEnvelope.length} frames`);
+          logMessage(`📈 Onset stats: max=${Math.max(...onsetEnvelope).toFixed(3)}, avg=${(onsetEnvelope.reduce((a,b)=>a+b,0)/onsetEnvelope.length).toFixed(3)}`);
           logMessage(`🎵 Step 2: Finding global tempo candidates...`);
           
           // Global tempo estimation using the full onset envelope
           const globalTempo = await estimateGlobalTempo(onsetEnvelope, sr);
           
           logMessage(`🎯 Global tempo: ${globalTempo.bpm.toFixed(1)} BPM (confidence: ${(globalTempo.confidence * 100).toFixed(1)}%)`);
+          logMessage(`🔍 Best correlation score: ${globalTempo.score.toFixed(4)}`);
+          logMessage(`📊 Top tempo candidates:`);
+          
+          for (let i = 0; i < Math.min(globalTempo.candidates.length, 5); i++) {
+            const candidate = globalTempo.candidates[i];
+            logMessage(`   ${i+1}. ${candidate.bpm.toFixed(1)} BPM (score: ${candidate.score.toFixed(4)})`);
+          }
+          
           logMessage(`🎵 Step 3: Analyzing tempo stability over time...`);
           
           // Now do windowed analysis but constrained around the global tempo
           const windowSamples = Math.floor(windowSize * sr);
           const hopSamples = Math.floor(hopSize * sr);
           const numWindows = Math.floor((y.length - windowSamples) / hopSamples);
+          
+          logMessage(`⚙️ Window analysis: ${numWindows} windows, ${windowSize}s each, ${hopSize}s hops`);
           
           const dynamicTempo = [];
           const times = [];
@@ -204,16 +231,25 @@
             const window = y.slice(start, start + windowSamples);
             
             // Constrained tempo estimation around global tempo
-            const localTempo = await estimateConstrainedTempo(window, sr, globalTempo.bpm);
+            const localResult = await estimateConstrainedTempo(window, sr, globalTempo.bpm, i);
             
-            dynamicTempo.push(localTempo);
+            dynamicTempo.push(localResult.bpm);
             times.push(start / sr);
             
-            if (i % 5 === 0) {
-              const progress = ((i / numWindows) * 100).toFixed(0);
-              logMessage(`Analyzing stability... ${progress}% (window ${i}/${numWindows})`);
-              bpmDisplay.textContent = `BPM: ${globalTempo.bpm.toFixed(1)} (${progress}% analyzed)`;
-              await new Promise(resolve => setTimeout(resolve, 1));
+            // Show every window's result
+            const deviation = Math.abs(localResult.bpm - globalTempo.bpm);
+            const status = deviation < 3 ? "✅" : deviation < 8 ? "⚠️" : "❌";
+            const deviationStr = deviation > 0.1 ? ` (${deviation > 0 ? '+' : ''}${(localResult.bpm - globalTempo.bpm).toFixed(1)})` : '';
+            
+            logMessage(`[${i.toString().padStart(2,'0')}] t=${times[i].toFixed(1)}s → ${localResult.bpm.toFixed(1)} BPM${deviationStr} ${status} (corr: ${localResult.correlation.toFixed(3)})`);
+            
+            // Update display with current progress
+            const progress = ((i / numWindows) * 100).toFixed(0);
+            bpmDisplay.textContent = `BPM: ${globalTempo.bpm.toFixed(1)} (${progress}% analyzed)`;
+            
+            // Yield more frequently to see updates
+            if (i % 2 === 0) {
+              await new Promise(resolve => setTimeout(resolve, 10));
             }
           }
           
@@ -222,7 +258,8 @@
             times, 
             tempo: dynamicTempo,
             globalTempo: globalTempo.bpm,
-            confidence: globalTempo.confidence
+            confidence: globalTempo.confidence,
+            candidates: globalTempo.candidates
           };
           
         } catch (error) {
@@ -237,7 +274,10 @@
         const frames = Math.floor((y.length - frameLength) / hopLength) + 1;
         const onset = new Float32Array(frames);
         
+        logMessage(`🔧 Onset computation: ${frames} frames, ${frameLength} frame size, ${hopLength} hop`);
+        
         let prevSpectrum = null;
+        let maxFlux = 0;
         
         for (let i = 0; i < frames; i++) {
           const start = i * hopLength;
@@ -259,18 +299,22 @@
               flux += Math.max(0, spectrum[k] - prevSpectrum[k]);
             }
             onset[i] = flux;
+            maxFlux = Math.max(maxFlux, flux);
           } else {
             onset[i] = 0;
           }
           
           prevSpectrum = spectrum;
           
-          // Yield occasionally
-          if (i % 100 === 0) {
+          // Show progress and peek at onset values
+          if (i % 200 === 0) {
+            const progress = ((i / frames) * 100).toFixed(0);
+            logMessage(`   Computing onsets... ${progress}% (frame ${i}/${frames}, flux: ${onset[i].toFixed(3)})`);
             await new Promise(resolve => setTimeout(resolve, 1));
           }
         }
         
+        logMessage(`📊 Onset envelope: max flux = ${maxFlux.toFixed(3)}`);
         return onset;
       }
 
@@ -290,10 +334,11 @@
         const maxLag = Math.floor((60 * sr) / (tempoConstraints.min * hopLength));
         
         logMessage(`🔍 Searching tempo range: ${tempoConstraints.min}-${tempoConstraints.max} BPM`);
-        logMessage(`📊 Autocorrelation lags: ${minLag} to ${maxLag} frames`);
+        logMessage(`📊 Autocorrelation: ${minLag} to ${maxLag} lag frames (${maxLag-minLag+1} calculations)`);
         
         // Compute autocorrelation
         const autocorr = new Float32Array(maxLag - minLag + 1);
+        const candidates = [];
         
         for (let lagIdx = 0; lagIdx < autocorr.length; lagIdx++) {
           const lag = minLag + lagIdx;
@@ -307,90 +352,154 @@
           
           autocorr[lagIdx] = norm > 0 ? corr / norm : 0;
           
-          // Yield occasionally
-          if (lagIdx % 10 === 0) {
+          // Convert to BPM and store candidate
+          const bpm = (60 * sr) / (lag * hopLength);
+          candidates.push({ bpm, score: autocorr[lagIdx], lag });
+          
+          // Show autocorrelation progress with some values
+          if (lagIdx % 20 === 0) {
+            const progress = ((lagIdx / autocorr.length) * 100).toFixed(0);
+            logMessage(`   Autocorr ${progress}%: lag=${lag} → ${bpm.toFixed(1)} BPM (corr: ${autocorr[lagIdx].toFixed(4)})`);
             await new Promise(resolve => setTimeout(resolve, 1));
           }
         }
         
-        // Find the best tempo with musical knowledge
+        // Find peaks and apply musical knowledge
+        logMessage(`🎯 Finding tempo peaks with musical constraints...`);
+        
         let bestBpm = 120;
         let bestScore = 0;
         
-        for (let i = 0; i < autocorr.length; i++) {
-          const lag = minLag + i;
-          const bpm = (60 * sr) / (lag * hopLength);
-          let score = autocorr[i];
+        // Sort candidates by score to see top contenders
+        candidates.sort((a, b) => b.score - a.score);
+        
+        logMessage(`📈 Raw autocorrelation peaks:`);
+        for (let i = 0; i < Math.min(10, candidates.length); i++) {
+          const candidate = candidates[i];
+          logMessage(`   ${i+1}. ${candidate.bpm.toFixed(1)} BPM (score: ${candidate.score.toFixed(4)})`);
+        }
+        
+        // Apply musical knowledge boosts
+        for (let i = 0; i < candidates.length; i++) {
+          const candidate = candidates[i];
+          let score = candidate.score;
+          let boost = 1.0;
           
           // Boost common tempos
           for (const commonBpm of tempoConstraints.common) {
-            if (Math.abs(bpm - commonBpm) < 3) {
-              score *= 1.2; // 20% boost for common tempos
+            if (Math.abs(candidate.bpm - commonBpm) < 3) {
+              boost = 1.3; // 30% boost for common tempos
               break;
             }
           }
           
-          if (score > bestScore) {
-            bestScore = score;
-            bestBpm = bpm;
+          const boostedScore = score * boost;
+          candidate.boostedScore = boostedScore;
+          
+          if (boostedScore > bestScore) {
+            bestScore = boostedScore;
+            bestBpm = candidate.bpm;
           }
+        }
+        
+        // Sort by boosted score
+        candidates.sort((a, b) => (b.boostedScore || b.score) - (a.boostedScore || a.score));
+        
+        logMessage(`🎵 After musical knowledge boost:`);
+        for (let i = 0; i < Math.min(5, candidates.length); i++) {
+          const candidate = candidates[i];
+          const boost = candidate.boostedScore ? ` (boosted: ${candidate.boostedScore.toFixed(4)})` : '';
+          logMessage(`   ${i+1}. ${candidate.bpm.toFixed(1)} BPM (raw: ${candidate.score.toFixed(4)}${boost})`);
         }
         
         // Calculate confidence based on peak prominence
         const avgCorr = autocorr.reduce((a, b) => a + b, 0) / autocorr.length;
-        const confidence = Math.min(1.0, (bestScore - avgCorr) / avgCorr);
+        const confidence = Math.min(1.0, Math.max(0, (bestScore - avgCorr) / (avgCorr + 0.001)));
+        
+        logMessage(`📊 Confidence calculation: best=${bestScore.toFixed(4)}, avg=${avgCorr.toFixed(4)} → ${(confidence*100).toFixed(1)}%`);
         
         return { 
           bpm: Math.max(tempoConstraints.min, Math.min(tempoConstraints.max, bestBpm)),
-          confidence: confidence
+          confidence: confidence,
+          score: bestScore,
+          candidates: candidates.slice(0, 10) // Top 10 candidates
         };
       }
 
       // Constrained tempo estimation around global tempo
-      async function estimateConstrainedTempo(audioWindow, sampleRate, globalBpm) {
+      async function estimateConstrainedTempo(audioWindow, sampleRate, globalBpm, windowIndex) {
         // Allow only small deviations from global tempo (±10 BPM)
         const tolerance = 10;
         const minBpm = Math.max(70, globalBpm - tolerance);
         const maxBpm = Math.min(180, globalBpm + tolerance);
         
+        logMessage(`   [${windowIndex}] Constraint: ${minBpm.toFixed(1)}-${maxBpm.toFixed(1)} BPM around global ${globalBpm.toFixed(1)}`);
+        
         // Quick energy-based analysis constrained to this range
         const frameSize = 1024;
         const hopSize = 256;
         const onsets = [];
+        let totalEnergy = 0;
         
         for (let i = 0; i < audioWindow.length - frameSize; i += hopSize) {
           let energy = 0;
           for (let j = i; j < i + frameSize && j < audioWindow.length; j++) {
             energy += audioWindow[j] * audioWindow[j];
           }
-          onsets.push(Math.sqrt(energy));
+          const energySqrt = Math.sqrt(energy);
+          onsets.push(energySqrt);
+          totalEnergy += energySqrt;
         }
+        
+        const avgEnergy = totalEnergy / onsets.length;
+        logMessage(`   [${windowIndex}] Onset energy: ${onsets.length} frames, avg=${avgEnergy.toFixed(3)}, max=${Math.max(...onsets).toFixed(3)}`);
         
         // Simple autocorrelation in constrained range
         const lagMin = Math.floor(60 * sampleRate / (maxBpm * hopSize));
         const lagMax = Math.floor(60 * sampleRate / (minBpm * hopSize));
         
+        logMessage(`   [${windowIndex}] Checking lags ${lagMin}-${lagMax} for tempo candidates...`);
+        
         let bestBpm = globalBpm;
         let maxCorr = 0;
+        const correlations = [];
         
         for (let lag = lagMin; lag < Math.min(lagMax, onsets.length / 2); lag++) {
           let corr = 0;
+          let normalization = 0;
+          
           for (let i = 0; i < onsets.length - lag; i++) {
             corr += onsets[i] * onsets[i + lag];
+            normalization += onsets[i] * onsets[i];
           }
           
-          if (corr > maxCorr) {
-            maxCorr = corr;
-            const candidateBpm = 60 * sampleRate / (lag * hopSize);
-            
-            // Only accept if within tolerance
-            if (candidateBpm >= minBpm && candidateBpm <= maxBpm) {
-              bestBpm = candidateBpm;
-            }
+          const normalizedCorr = normalization > 0 ? corr / normalization : 0;
+          const candidateBpm = 60 * sampleRate / (lag * hopSize);
+          
+          correlations.push({ bpm: candidateBpm, correlation: normalizedCorr, lag });
+          
+          if (normalizedCorr > maxCorr && candidateBpm >= minBpm && candidateBpm <= maxBpm) {
+            maxCorr = normalizedCorr;
+            bestBpm = candidateBpm;
           }
         }
         
-        return bestBpm;
+        // Show top correlations for this window
+        correlations.sort((a, b) => b.correlation - a.correlation);
+        logMessage(`   [${windowIndex}] Top correlations in window:`);
+        for (let i = 0; i < Math.min(3, correlations.length); i++) {
+          const c = correlations[i];
+          const withinRange = c.bpm >= minBpm && c.bpm <= maxBpm ? "✓" : "✗";
+          logMessage(`       ${c.bpm.toFixed(1)} BPM: ${c.correlation.toFixed(4)} ${withinRange}`);
+        }
+        
+        logMessage(`   [${windowIndex}] Selected: ${bestBpm.toFixed(1)} BPM (correlation: ${maxCorr.toFixed(4)})`);
+        
+        return {
+          bpm: bestBpm,
+          correlation: maxCorr,
+          candidates: correlations.slice(0, 5)
+        };
       }
 
       // Simple spectrum computation without full FFT
@@ -511,12 +620,13 @@
         padding: 1rem;
         border: 1px solid #ddd;
         border-radius: 5px;
-        height: 300px;
+        height: 500px;
         overflow-y: auto;
         font-family: monospace;
-        font-size: 0.9rem;
+        font-size: 0.85rem;
         background: #f8f9fa;
         white-space: pre-wrap;
+        line-height: 1.3;
       }
 
       @media (max-width: 600px) {
