@@ -108,7 +108,7 @@
           // Use simpler, faster analysis for large files
           const isLargeFile = y.length > sr * 30; // More than 30 seconds
           const windowSize = isLargeFile ? 8.0 : 4.0;
-          const hopSize = isLargeFile ? 2.0 : 1.0;
+          const hopSize = isLargeFile ? 1.0 : 1.0;
 
           bpmDisplay.textContent = "BPM: Analyzing...";
           clearLog();
