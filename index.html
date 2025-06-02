@@ -420,9 +420,6 @@
         // Find peaks and apply musical knowledge
         logMessage(`🎯 Finding tempo peaks with musical constraints...`);
         
-        let bestBpm = 120;
-        let bestScore = 0;
-        
         // Sort candidates by score to see top contenders
         candidates.sort((a, b) => b.score - a.score);
         
