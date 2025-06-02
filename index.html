@@ -108,7 +108,7 @@
           // Use simpler, faster analysis for large files
           const isLargeFile = y.length > sr * 30; // More than 30 seconds
           const windowSize = isLargeFile ? 8.0 : 4.0;
-          const hopSize = isLargeFile ? 1.0 : 4.0;
+          const hopSize = isLargeFile ? 2.0 : 1.0;
 
           bpmDisplay.textContent = "BPM: Analyzing...";
           clearLog();
@@ -134,11 +134,11 @@
             logMessage(`🎯 GLOBAL TEMPO: ${globalTempo.toFixed(1)} BPM (${(confidence * 100).toFixed(1)}% confidence)`);
             
             // Show all global candidates
-            logMessage(`🏆 Final global tempo candidates:`);
+            logMessage(`🏆 Final global tempo candidates (raw autocorrelation only):`);
             for (let i = 0; i < Math.min(candidates.length, 5); i++) {
               const candidate = candidates[i];
               const isWinner = Math.abs(candidate.bpm - globalTempo) < 0.1 ? "👑" : "";
-              logMessage(`   ${i+1}. ${candidate.bpm.toFixed(1)} BPM (score: ${(candidate.boostedScore || candidate.score).toFixed(4)}) ${isWinner}`);
+              logMessage(`   ${i+1}. ${candidate.bpm.toFixed(1)} BPM (score: ${candidate.score.toFixed(4)}) ${isWinner}`);
             }
             
             // Tempogram analysis results
@@ -160,12 +160,12 @@
               const agreementError = Math.abs(tempogramTop.bpm - globalTempo);
               logMessage(`🔍 Method agreement: Global=${globalTempo.toFixed(1)} vs Tempogram=${tempogramTop.bpm.toFixed(1)} BPM (±${agreementError.toFixed(1)})`);
               
-              if (agreementError < 3) {
-                logMessage(`✅ EXCELLENT: Both methods agree within ±3 BPM`);
-              } else if (agreementError < 8) {
-                logMessage(`⚠️ MODERATE: Methods agree within ±8 BPM`);
+              if (agreementError < 5) {
+                logMessage(`✅ EXCELLENT: Both methods agree within ±5 BPM`);
+              } else if (agreementError < 15) {
+                logMessage(`⚠️ MODERATE: Methods agree within ±15 BPM`);
               } else {
-                logMessage(`❌ DISAGREEMENT: Methods differ by >8 BPM - complex tempo`);
+                logMessage(`❌ DISAGREEMENT: Methods differ by >15 BPM - complex tempo`);
               }
             } else {
               logMessage(`   ❓ No clear peaks found in tempogram - complex/weak tempo`);
@@ -179,21 +179,21 @@
             logMessage(`📊 TEMPO STABILITY ANALYSIS:`);
             logMessage(`   Average deviation: ±${avgDeviation.toFixed(1)} BPM`);
             logMessage(`   Maximum deviation: ±${maxDeviation.toFixed(1)} BPM`);
-            logMessage(`   Stability windows: ${tempo.filter(t => Math.abs(t - globalTempo) < 3).length}/${tempo.length} stable (±3 BPM)`);
+            logMessage(`   Stability windows: ${tempo.filter(t => Math.abs(t - globalTempo) < 5).length}/${tempo.length} stable (±5 BPM)`);
             
             // Show stability per window (already shown during analysis)
             logMessage(`📈 WINDOW-BY-WINDOW SUMMARY:`);
-            const stableCount = tempo.filter(t => Math.abs(t - globalTempo) < 3).length;
-            const moderateCount = tempo.filter(t => Math.abs(t - globalTempo) >= 3 && Math.abs(t - globalTempo) < 8).length;
-            const unstableCount = tempo.filter(t => Math.abs(t - globalTempo) >= 8).length;
+            const stableCount = tempo.filter(t => Math.abs(t - globalTempo) < 5).length;
+            const moderateCount = tempo.filter(t => Math.abs(t - globalTempo) >= 5 && Math.abs(t - globalTempo) < 15).length;
+            const unstableCount = tempo.filter(t => Math.abs(t - globalTempo) >= 15).length;
             
-            logMessage(`   ✅ Stable (±3 BPM): ${stableCount} windows`);
-            logMessage(`   ⚠️ Moderate (3-8 BPM): ${moderateCount} windows`);
-            logMessage(`   ❌ Unstable (>8 BPM): ${unstableCount} windows`);
+            logMessage(`   ✅ Stable (±5 BPM): ${stableCount} windows`);
+            logMessage(`   ⚠️ Moderate (5-15 BPM): ${moderateCount} windows`);
+            logMessage(`   ❌ Unstable (>15 BPM): ${unstableCount} windows`);
 
             // Final BPM display with tempogram confirmation
-            const stabilityStatus = avgDeviation < 3 ? "STABLE" : avgDeviation < 8 ? "MODERATE" : "UNSTABLE";
-            const tempogramConfirmed = tempogram.peakTempos.length > 0 && Math.abs(tempogram.peakTempos[0].bpm - globalTempo) < 5;
+            const stabilityStatus = avgDeviation < 5 ? "STABLE" : avgDeviation < 15 ? "MODERATE" : "UNSTABLE";
+            const tempogramConfirmed = tempogram.peakTempos.length > 0 && Math.abs(tempogram.peakTempos[0].bpm - globalTempo) < 10;
             const displaySuffix = tempogramConfirmed ? " ✓" : stabilityStatus;
             
             bpmDisplay.textContent = `BPM: ${globalTempo.toFixed(1)} (${displaySuffix})`;
@@ -387,6 +387,7 @@
         
         logMessage(`🔍 Searching tempo range: ${tempoConstraints.min}-${tempoConstraints.max} BPM`);
         logMessage(`📊 Autocorrelation: ${minLag} to ${maxLag} lag frames (${maxLag-minLag+1} calculations)`);
+        logMessage(`⚡ Using RAW autocorrelation scores only - no arbitrary musical boosts`);
         
         // Compute autocorrelation
         const autocorr = new Float32Array(maxLag - minLag + 1);
@@ -431,37 +432,28 @@
           logMessage(`   ${i+1}. ${candidate.bpm.toFixed(1)} BPM (score: ${candidate.score.toFixed(4)})`);
         }
         
-        // Apply musical knowledge boosts
+        // Find the best tempo - NO ARBITRARY BOOSTS
+        let bestBpm = 120;
+        let bestScore = 0;
+        
         for (let i = 0; i < candidates.length; i++) {
           const candidate = candidates[i];
-          let score = candidate.score;
-          let boost = 1.0;
           
-          // Boost common tempos
-          for (const commonBpm of tempoConstraints.common) {
-            if (Math.abs(candidate.bpm - commonBpm) < 3) {
-              boost = 1.3; // 30% boost for common tempos
-              break;
-            }
-          }
-          
-          const boostedScore = score * boost;
-          candidate.boostedScore = boostedScore;
-          
-          if (boostedScore > bestScore) {
-            bestScore = boostedScore;
+          // Use raw autocorrelation score only - no artificial boosts
+          if (candidate.score > bestScore) {
+            bestScore = candidate.score;
             bestBpm = candidate.bpm;
           }
         }
         
-        // Sort by boosted score
-        candidates.sort((a, b) => (b.boostedScore || b.score) - (a.boostedScore || a.score));
+        // Sort by raw score only
+        candidates.sort((a, b) => b.score - a.score);
         
-        logMessage(`🎵 After musical knowledge boost:`);
+        logMessage(`🎵 Final ranking by RAW autocorrelation only (no boosts):`);
         for (let i = 0; i < Math.min(5, candidates.length); i++) {
           const candidate = candidates[i];
-          const boost = candidate.boostedScore ? ` (boosted: ${candidate.boostedScore.toFixed(4)})` : '';
-          logMessage(`   ${i+1}. ${candidate.bpm.toFixed(1)} BPM (raw: ${candidate.score.toFixed(4)}${boost})`);
+          const isWinner = Math.abs(candidate.bpm - bestBpm) < 0.1 ? " 👑" : "";
+          logMessage(`   ${i+1}. ${candidate.bpm.toFixed(1)} BPM (raw score: ${candidate.score.toFixed(4)})${isWinner}`);
         }
         
         // Calculate confidence based on peak prominence
@@ -667,16 +659,17 @@
         };
       }
 
-      // Constrained tempo estimation around global tempo
+      // Constrained tempo estimation - WIDER constraints to avoid missing real tempo
       async function estimateConstrainedTempo(audioWindow, sampleRate, globalBpm, windowIndex) {
-        // Allow only small deviations from global tempo (±10 BPM)
-        const tolerance = 10;
-        const minBpm = Math.max(70, globalBpm - tolerance);
-        const maxBpm = Math.min(180, globalBpm + tolerance);
+        // Use much wider constraints - allow up to ±50 BPM deviation
+        // This prevents locking out the real tempo if global detection was wrong
+        const tolerance = 50;
+        const minBpm = Math.max(60, globalBpm - tolerance);  // Minimum 60 BPM
+        const maxBpm = Math.min(200, globalBpm + tolerance); // Maximum 200 BPM
         
-        logMessage(`   [${windowIndex}] Constraint: ${minBpm.toFixed(1)}-${maxBpm.toFixed(1)} BPM around global ${globalBpm.toFixed(1)}`);
+        logMessage(`   [${windowIndex}] WIDE constraint: ${minBpm.toFixed(1)}-${maxBpm.toFixed(1)} BPM (±${tolerance} around global ${globalBpm.toFixed(1)})`);
         
-        // Quick energy-based analysis constrained to this range
+        // Quick energy-based analysis in wide range
         const frameSize = 1024;
         const hopSize = 256;
         const onsets = [];
@@ -695,11 +688,11 @@
         const avgEnergy = totalEnergy / onsets.length;
         logMessage(`   [${windowIndex}] Onset energy: ${onsets.length} frames, avg=${avgEnergy.toFixed(3)}, max=${Math.max(...onsets).toFixed(3)}`);
         
-        // Simple autocorrelation in constrained range
+        // Autocorrelation in wide range
         const lagMin = Math.floor(60 * sampleRate / (maxBpm * hopSize));
         const lagMax = Math.floor(60 * sampleRate / (minBpm * hopSize));
         
-        logMessage(`   [${windowIndex}] Checking lags ${lagMin}-${lagMax} for tempo candidates...`);
+        logMessage(`   [${windowIndex}] Checking lags ${lagMin}-${lagMax} for ALL tempo candidates...`);
         
         let bestBpm = globalBpm;
         let maxCorr = 0;
@@ -719,19 +712,23 @@
           
           correlations.push({ bpm: candidateBpm, correlation: normalizedCorr, lag });
           
+          // Accept ANY tempo in the wide range
           if (normalizedCorr > maxCorr && candidateBpm >= minBpm && candidateBpm <= maxBpm) {
             maxCorr = normalizedCorr;
             bestBpm = candidateBpm;
           }
         }
         
-        // Show top correlations for this window
+        // Sort correlations by strength to see all candidates
         correlations.sort((a, b) => b.correlation - a.correlation);
-        logMessage(`   [${windowIndex}] Top correlations in window:`);
-        for (let i = 0; i < Math.min(3, correlations.length); i++) {
+        
+        // Show top correlations for this window (including out-of-constraint ones)
+        logMessage(`   [${windowIndex}] Top correlations in window (all candidates):`);
+        for (let i = 0; i < Math.min(5, correlations.length); i++) {
           const c = correlations[i];
-          const withinRange = c.bpm >= minBpm && c.bpm <= maxBpm ? "✓" : "✗";
-          logMessage(`       ${c.bpm.toFixed(1)} BPM: ${c.correlation.toFixed(4)} ${withinRange}`);
+          const globalMatch = Math.abs(c.bpm - globalBpm) < 10 ? "🎯" : "";
+          const selected = Math.abs(c.bpm - bestBpm) < 0.1 ? "👑" : "";
+          logMessage(`       ${c.bpm.toFixed(1)} BPM: ${c.correlation.toFixed(4)} ${globalMatch}${selected}`);
         }
         
         logMessage(`   [${windowIndex}] Selected: ${bestBpm.toFixed(1)} BPM (correlation: ${maxCorr.toFixed(4)})`);
