@@ -125,25 +125,41 @@
           const analysisTime = (performance.now() - startTime) / 1000;
 
           if (result.success) {
-            const { times, tempo } = result;
+            const { times, tempo, globalTempo, confidence } = result;
             
             logMessage(`✅ Analysis completed in ${analysisTime.toFixed(1)}s`);
-            logMessage(`Found ${tempo.length} tempo readings:`);
-
-            for (let i = 0; i < Math.min(times.length, 10); i++) {
-              logMessage(`  [${i}] t=${times[i].toFixed(1)}s → ${tempo[i].toFixed(1)} BPM`);
+            logMessage(`🎯 GLOBAL TEMPO: ${globalTempo.toFixed(1)} BPM (${(confidence * 100).toFixed(1)}% confidence)`);
+            
+            // Calculate tempo stability
+            const deviations = tempo.map(t => Math.abs(t - globalTempo));
+            const avgDeviation = deviations.reduce((a, b) => a + b, 0) / deviations.length;
+            const maxDeviation = Math.max(...deviations);
+            
+            logMessage(`📊 Tempo stability: ±${avgDeviation.toFixed(1)} BPM average, ±${maxDeviation.toFixed(1)} BPM max`);
+            
+            // Show first few readings to demonstrate consistency
+            logMessage(`🎵 Local tempo readings (should be consistent):`);
+            for (let i = 0; i < Math.min(times.length, 8); i++) {
+              const deviation = Math.abs(tempo[i] - globalTempo);
+              const status = deviation < 5 ? "✅" : deviation < 10 ? "⚠️" : "❌";
+              logMessage(`  [${i}] t=${times[i].toFixed(1)}s → ${tempo[i].toFixed(1)} BPM ${status}`);
             }
 
-            if (tempo.length > 10) {
-              logMessage(`  ... and ${tempo.length - 10} more readings`);
+            if (tempo.length > 8) {
+              logMessage(`  ... and ${tempo.length - 8} more readings`);
             }
 
-            const avgBpm = tempo.reduce((sum, bpm) => sum + bpm, 0) / tempo.length;
-            const minBpm = Math.min(...tempo);
-            const maxBpm = Math.max(...tempo);
-
-            bpmDisplay.textContent = `BPM: ${avgBpm.toFixed(1)}`;
-            logMessage(`📊 Average: ${avgBpm.toFixed(1)} BPM (range: ${minBpm.toFixed(1)}-${maxBpm.toFixed(1)})`);
+            // Final BPM display
+            const stabilityStatus = avgDeviation < 3 ? "STABLE" : avgDeviation < 8 ? "MODERATE" : "UNSTABLE";
+            bpmDisplay.textContent = `BPM: ${globalTempo.toFixed(1)} (${stabilityStatus})`;
+            
+            if (confidence > 0.7) {
+              logMessage(`🎉 High confidence result! This track is likely ${globalTempo.toFixed(1)} BPM`);
+            } else if (confidence > 0.4) {
+              logMessage(`⚠️ Moderate confidence. Track might be ${globalTempo.toFixed(1)} BPM`);
+            } else {
+              logMessage(`❓ Low confidence. This might be a complex or ambiguous tempo track`);
+            }
           } else {
             throw new Error(result.error);
           }
@@ -158,14 +174,27 @@
         }
       };
 
-      // Async analysis with progress updates
+      // Improved global tempo estimation
       async function analyzeWithProgress(y, sr, windowSize, hopSize) {
         try {
+          logMessage(`🎵 Step 1: Computing onset strength for entire track...`);
+          
+          // First, get onset strength for the ENTIRE track (not windowed)
+          const onsetEnvelope = await computeOnsetStrength(y, sr);
+          
+          logMessage(`✅ Onset envelope computed: ${onsetEnvelope.length} frames`);
+          logMessage(`🎵 Step 2: Finding global tempo candidates...`);
+          
+          // Global tempo estimation using the full onset envelope
+          const globalTempo = await estimateGlobalTempo(onsetEnvelope, sr);
+          
+          logMessage(`🎯 Global tempo: ${globalTempo.bpm.toFixed(1)} BPM (confidence: ${(globalTempo.confidence * 100).toFixed(1)}%)`);
+          logMessage(`🎵 Step 3: Analyzing tempo stability over time...`);
+          
+          // Now do windowed analysis but constrained around the global tempo
           const windowSamples = Math.floor(windowSize * sr);
           const hopSamples = Math.floor(hopSize * sr);
           const numWindows = Math.floor((y.length - windowSamples) / hopSamples);
-          
-          logMessage(`Processing ${numWindows} analysis windows...`);
           
           const dynamicTempo = [];
           const times = [];
@@ -174,80 +203,215 @@
             const start = i * hopSamples;
             const window = y.slice(start, start + windowSamples);
             
-            // Simplified tempo estimation to avoid freezing
-            const tempo = await estimateTempoSimple(window, sr);
+            // Constrained tempo estimation around global tempo
+            const localTempo = await estimateConstrainedTempo(window, sr, globalTempo.bpm);
             
-            dynamicTempo.push(tempo);
+            dynamicTempo.push(localTempo);
             times.push(start / sr);
             
-            // Update progress every 10 windows and yield to browser
-            if (i % 10 === 0) {
+            if (i % 5 === 0) {
               const progress = ((i / numWindows) * 100).toFixed(0);
-              logMessage(`Processing... ${progress}% (window ${i}/${numWindows})`);
-              bpmDisplay.textContent = `BPM: ${progress}% analyzed`;
-              
-              // Yield to browser to prevent freezing
+              logMessage(`Analyzing stability... ${progress}% (window ${i}/${numWindows})`);
+              bpmDisplay.textContent = `BPM: ${globalTempo.bpm.toFixed(1)} (${progress}% analyzed)`;
               await new Promise(resolve => setTimeout(resolve, 1));
             }
           }
           
-          return { success: true, times, tempo: dynamicTempo };
+          return { 
+            success: true, 
+            times, 
+            tempo: dynamicTempo,
+            globalTempo: globalTempo.bpm,
+            confidence: globalTempo.confidence
+          };
           
         } catch (error) {
           return { success: false, error: error.message };
         }
       }
 
-      // Simplified, fast tempo estimation
-      async function estimateTempoSimple(audioWindow, sampleRate) {
-        // Use autocorrelation on a smaller sample for speed
-        const maxSamples = Math.min(audioWindow.length, sampleRate * 2); // Max 2 seconds
-        const samples = audioWindow.slice(0, maxSamples);
+      // Compute onset strength for entire track using spectral flux
+      async function computeOnsetStrength(y, sr) {
+        const frameLength = 2048;
+        const hopLength = 512;
+        const frames = Math.floor((y.length - frameLength) / hopLength) + 1;
+        const onset = new Float32Array(frames);
         
-        // Simplified onset detection - just use energy
+        let prevSpectrum = null;
+        
+        for (let i = 0; i < frames; i++) {
+          const start = i * hopLength;
+          
+          // Apply Hann window to frame
+          const frame = new Float32Array(frameLength);
+          for (let j = 0; j < frameLength && start + j < y.length; j++) {
+            const windowValue = 0.5 * (1 - Math.cos((2 * Math.PI * j) / (frameLength - 1)));
+            frame[j] = y[start + j] * windowValue;
+          }
+          
+          // Simple magnitude spectrum (avoiding complex FFT)
+          const spectrum = computeSimpleSpectrum(frame);
+          
+          if (prevSpectrum) {
+            // Spectral flux: sum of positive differences
+            let flux = 0;
+            for (let k = 0; k < Math.min(spectrum.length, prevSpectrum.length); k++) {
+              flux += Math.max(0, spectrum[k] - prevSpectrum[k]);
+            }
+            onset[i] = flux;
+          } else {
+            onset[i] = 0;
+          }
+          
+          prevSpectrum = spectrum;
+          
+          // Yield occasionally
+          if (i % 100 === 0) {
+            await new Promise(resolve => setTimeout(resolve, 1));
+          }
+        }
+        
+        return onset;
+      }
+
+      // Global tempo estimation with musical constraints
+      async function estimateGlobalTempo(onsetEnvelope, sr) {
+        const hopLength = 512;
+        
+        // Musical tempo constraints (most music falls in this range)
+        const tempoConstraints = {
+          min: 70,    // Ballads, ambient
+          max: 180,   // Fast electronic, punk
+          common: [80, 90, 100, 110, 120, 128, 140, 150, 160, 170] // Common BPMs
+        };
+        
+        // Convert BPM range to lag range for autocorrelation
+        const minLag = Math.floor((60 * sr) / (tempoConstraints.max * hopLength));
+        const maxLag = Math.floor((60 * sr) / (tempoConstraints.min * hopLength));
+        
+        logMessage(`🔍 Searching tempo range: ${tempoConstraints.min}-${tempoConstraints.max} BPM`);
+        logMessage(`📊 Autocorrelation lags: ${minLag} to ${maxLag} frames`);
+        
+        // Compute autocorrelation
+        const autocorr = new Float32Array(maxLag - minLag + 1);
+        
+        for (let lagIdx = 0; lagIdx < autocorr.length; lagIdx++) {
+          const lag = minLag + lagIdx;
+          let corr = 0;
+          let norm = 0;
+          
+          for (let i = 0; i < onsetEnvelope.length - lag; i++) {
+            corr += onsetEnvelope[i] * onsetEnvelope[i + lag];
+            norm += onsetEnvelope[i] * onsetEnvelope[i];
+          }
+          
+          autocorr[lagIdx] = norm > 0 ? corr / norm : 0;
+          
+          // Yield occasionally
+          if (lagIdx % 10 === 0) {
+            await new Promise(resolve => setTimeout(resolve, 1));
+          }
+        }
+        
+        // Find the best tempo with musical knowledge
+        let bestBpm = 120;
+        let bestScore = 0;
+        
+        for (let i = 0; i < autocorr.length; i++) {
+          const lag = minLag + i;
+          const bpm = (60 * sr) / (lag * hopLength);
+          let score = autocorr[i];
+          
+          // Boost common tempos
+          for (const commonBpm of tempoConstraints.common) {
+            if (Math.abs(bpm - commonBpm) < 3) {
+              score *= 1.2; // 20% boost for common tempos
+              break;
+            }
+          }
+          
+          if (score > bestScore) {
+            bestScore = score;
+            bestBpm = bpm;
+          }
+        }
+        
+        // Calculate confidence based on peak prominence
+        const avgCorr = autocorr.reduce((a, b) => a + b, 0) / autocorr.length;
+        const confidence = Math.min(1.0, (bestScore - avgCorr) / avgCorr);
+        
+        return { 
+          bpm: Math.max(tempoConstraints.min, Math.min(tempoConstraints.max, bestBpm)),
+          confidence: confidence
+        };
+      }
+
+      // Constrained tempo estimation around global tempo
+      async function estimateConstrainedTempo(audioWindow, sampleRate, globalBpm) {
+        // Allow only small deviations from global tempo (±10 BPM)
+        const tolerance = 10;
+        const minBpm = Math.max(70, globalBpm - tolerance);
+        const maxBpm = Math.min(180, globalBpm + tolerance);
+        
+        // Quick energy-based analysis constrained to this range
         const frameSize = 1024;
-        const hopSize = 512;
+        const hopSize = 256;
         const onsets = [];
         
-        for (let i = 0; i < samples.length - frameSize; i += hopSize) {
+        for (let i = 0; i < audioWindow.length - frameSize; i += hopSize) {
           let energy = 0;
-          for (let j = i; j < i + frameSize && j < samples.length; j++) {
-            energy += samples[j] * samples[j];
+          for (let j = i; j < i + frameSize && j < audioWindow.length; j++) {
+            energy += audioWindow[j] * audioWindow[j];
           }
           onsets.push(Math.sqrt(energy));
         }
         
-        // Simple peak detection for tempo
-        const bpmRange = { min: 60, max: 200 };
-        const lagRange = {
-          min: Math.floor(60 * sampleRate / (bpmRange.max * hopSize)),
-          max: Math.floor(60 * sampleRate / (bpmRange.min * hopSize))
-        };
+        // Simple autocorrelation in constrained range
+        const lagMin = Math.floor(60 * sampleRate / (maxBpm * hopSize));
+        const lagMax = Math.floor(60 * sampleRate / (minBpm * hopSize));
         
-        let bestBpm = 120;
+        let bestBpm = globalBpm;
         let maxCorr = 0;
         
-        // Simple autocorrelation
-        for (let lag = lagRange.min; lag < Math.min(lagRange.max, onsets.length / 2); lag++) {
+        for (let lag = lagMin; lag < Math.min(lagMax, onsets.length / 2); lag++) {
           let corr = 0;
-          let count = 0;
-          
           for (let i = 0; i < onsets.length - lag; i++) {
             corr += onsets[i] * onsets[i + lag];
-            count++;
           }
           
-          if (count > 0) {
-            corr /= count;
-            if (corr > maxCorr) {
-              maxCorr = corr;
-              bestBpm = 60 * sampleRate / (lag * hopSize);
+          if (corr > maxCorr) {
+            maxCorr = corr;
+            const candidateBpm = 60 * sampleRate / (lag * hopSize);
+            
+            // Only accept if within tolerance
+            if (candidateBpm >= minBpm && candidateBpm <= maxBpm) {
+              bestBpm = candidateBpm;
             }
           }
         }
         
-        // Constrain to reasonable range
-        return Math.max(bpmRange.min, Math.min(bpmRange.max, bestBpm));
+        return bestBpm;
+      }
+
+      // Simple spectrum computation without full FFT
+      function computeSimpleSpectrum(frame) {
+        const spectrum = new Float32Array(frame.length / 2);
+        
+        // Use a simplified frequency analysis
+        for (let k = 0; k < spectrum.length; k++) {
+          let real = 0, imag = 0;
+          
+          // Sample only every 4th point for speed
+          for (let n = 0; n < frame.length; n += 4) {
+            const angle = (-2 * Math.PI * k * n) / frame.length;
+            real += frame[n] * Math.cos(angle);
+            imag += frame[n] * Math.sin(angle);
+          }
+          
+          spectrum[k] = Math.sqrt(real * real + imag * imag);
+        }
+        
+        return spectrum;
       }
 
       // Initialize
