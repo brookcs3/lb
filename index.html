@@ -40,35 +40,66 @@
     });
 
     playBtn.onclick = () => {
-      if (!audioBuffer || !audioContext) return;
-      if (sourceNode) sourceNode.stop();
+      if (!audioBuffer || !audioContext) {
+        console.error('No audio buffer or context available');
+        bpmDisplay.textContent = 'BPM: No audio loaded';
+        return;
+      }
 
-      // Create and play the audio
-      sourceNode = audioContext.createBufferSource();
-      sourceNode.buffer = audioBuffer;
-      sourceNode.loop = true;
-      sourceNode.connect(audioContext.destination);
-      sourceNode.start();
-
-      // Get BPM with proper error handling
       try {
-        // Get the audio data
+        // Stop existing playback if any
+        if (sourceNode) sourceNode.stop();
+
+        // Log audio buffer details
+        console.log('Audio Buffer Details:', {
+          duration: audioBuffer.duration,
+          numberOfChannels: audioBuffer.numberOfChannels,
+          sampleRate: audioBuffer.sampleRate,
+          length: audioBuffer.length
+        });
+
+        // Create and setup source node
+        sourceNode = audioContext.createBufferSource();
+        sourceNode.buffer = audioBuffer;
+        sourceNode.loop = true;
+        sourceNode.connect(audioContext.destination);
+        sourceNode.start();
+
+        // Get audio data from first channel
         const audioData = audioBuffer.getChannelData(0);
         
-        // Use quickBeatTrack to analyze
-        const result = quickBeatTrack(audioData, audioBuffer.sampleRate);
-        
-        // Log the full result to see what we get
-        console.log('Beat tracking result:', result);
-        
-        // Update the display
-        if (result && result.bpm) {
-          bpmDisplay.textContent = `BPM: ${result.bpm.toFixed(2)}`;
+        // Check if we have valid audio data
+        console.log('Audio Data Check:', {
+          length: audioData.length,
+          hasData: audioData.some(x => x !== 0),
+          firstFewSamples: audioData.slice(0, 5)
+        });
+
+        // Try to detect BPM using beat_track function
+        const { tempo, beats } = beat_track(audioData, audioBuffer.sampleRate, {
+          hopLength: 512,
+          units: 'time',
+          sparse: true
+        });
+
+        console.log('Beat Detection Results:', {
+          tempo: tempo,
+          numberOfBeats: beats.length,
+          firstFewBeats: beats.slice(0, 5)
+        });
+
+        if (tempo) {
+          bpmDisplay.textContent = `BPM: ${typeof tempo === 'number' ? tempo.toFixed(2) : 'Invalid tempo'}`;
         } else {
           bpmDisplay.textContent = 'BPM: No tempo detected';
         }
+
       } catch (error) {
-        console.error('Error detecting BPM:', error);
+        console.error('Detailed error in BPM detection:', {
+          name: error.name,
+          message: error.message,
+          stack: error.stack
+        });
         bpmDisplay.textContent = 'BPM: Error detecting tempo';
       }
     };
