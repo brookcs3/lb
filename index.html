@@ -128,7 +128,7 @@
           const analysisTime = (performance.now() - startTime) / 1000;
 
           if (result.success) {
-            const { times, tempo, globalTempo, confidence, candidates } = result;
+            const { times, tempo, globalTempo, confidence, candidates, tempogram } = result;
             
             logMessage(`✅ Analysis completed in ${analysisTime.toFixed(1)}s`);
             logMessage(`🎯 GLOBAL TEMPO: ${globalTempo.toFixed(1)} BPM (${(confidence * 100).toFixed(1)}% confidence)`);
@@ -139,6 +139,36 @@
               const candidate = candidates[i];
               const isWinner = Math.abs(candidate.bpm - globalTempo) < 0.1 ? "👑" : "";
               logMessage(`   ${i+1}. ${candidate.bpm.toFixed(1)} BPM (score: ${(candidate.boostedScore || candidate.score).toFixed(4)}) ${isWinner}`);
+            }
+            
+            // Tempogram analysis results
+            logMessage(`📈 FOURIER TEMPOGRAM ANALYSIS:`);
+            logMessage(`   Time-frequency resolution: ${tempogram.frames} frames × ${tempogram.frequencies.length} frequencies`);
+            logMessage(`   Total spectral energy: ${tempogram.totalEnergy.toFixed(3)}`);
+            logMessage(`   Energy distribution:`);
+            
+            if (tempogram.peakTempos.length > 0) {
+              logMessage(`🎼 TEMPOGRAM PEAK TEMPOS (spectral analysis):`);
+              for (let i = 0; i < Math.min(tempogram.peakTempos.length, 8); i++) {
+                const peak = tempogram.peakTempos[i];
+                const globalMatch = Math.abs(peak.bpm - globalTempo) < 5 ? "🎯" : "";
+                logMessage(`   ${i+1}. ${peak.bpm.toFixed(1)} BPM (energy: ${peak.energy.toFixed(4)}, ${peak.frameCount}/${tempogram.frames} frames, ${(peak.prominence*100).toFixed(1)}%) ${globalMatch}`);
+              }
+              
+              // Check agreement between methods
+              const tempogramTop = tempogram.peakTempos[0];
+              const agreementError = Math.abs(tempogramTop.bpm - globalTempo);
+              logMessage(`🔍 Method agreement: Global=${globalTempo.toFixed(1)} vs Tempogram=${tempogramTop.bpm.toFixed(1)} BPM (±${agreementError.toFixed(1)})`);
+              
+              if (agreementError < 3) {
+                logMessage(`✅ EXCELLENT: Both methods agree within ±3 BPM`);
+              } else if (agreementError < 8) {
+                logMessage(`⚠️ MODERATE: Methods agree within ±8 BPM`);
+              } else {
+                logMessage(`❌ DISAGREEMENT: Methods differ by >8 BPM - complex tempo`);
+              }
+            } else {
+              logMessage(`   ❓ No clear peaks found in tempogram - complex/weak tempo`);
             }
             
             // Calculate tempo stability
@@ -161,13 +191,16 @@
             logMessage(`   ⚠️ Moderate (3-8 BPM): ${moderateCount} windows`);
             logMessage(`   ❌ Unstable (>8 BPM): ${unstableCount} windows`);
 
-            // Final BPM display
+            // Final BPM display with tempogram confirmation
             const stabilityStatus = avgDeviation < 3 ? "STABLE" : avgDeviation < 8 ? "MODERATE" : "UNSTABLE";
-            bpmDisplay.textContent = `BPM: ${globalTempo.toFixed(1)} (${stabilityStatus})`;
+            const tempogramConfirmed = tempogram.peakTempos.length > 0 && Math.abs(tempogram.peakTempos[0].bpm - globalTempo) < 5;
+            const displaySuffix = tempogramConfirmed ? " ✓" : stabilityStatus;
+            
+            bpmDisplay.textContent = `BPM: ${globalTempo.toFixed(1)} (${displaySuffix})`;
             
             logMessage(`🎉 FINAL RESULT:`);
-            if (confidence > 0.7) {
-              logMessage(`   🎯 HIGH CONFIDENCE: This track is ${globalTempo.toFixed(1)} BPM`);
+            if (confidence > 0.7 && tempogramConfirmed) {
+              logMessage(`   🎯 HIGH CONFIDENCE: Both methods confirm ${globalTempo.toFixed(1)} BPM`);
             } else if (confidence > 0.4) {
               logMessage(`   ⚠️ MODERATE CONFIDENCE: Track is likely ${globalTempo.toFixed(1)} BPM`);
             } else {
@@ -175,6 +208,10 @@
             }
             
             logMessage(`   📊 Overall stability: ${stabilityStatus} (±${avgDeviation.toFixed(1)} BPM average)`);
+            
+            if (tempogram.peakTempos.length > 1) {
+              logMessage(`   🎼 Multiple tempo candidates detected - possible tempo changes or polyrhythm`);
+            }
           } else {
             throw new Error(result.error);
           }
@@ -214,7 +251,21 @@
             logMessage(`   ${i+1}. ${candidate.bpm.toFixed(1)} BPM (score: ${candidate.score.toFixed(4)})`);
           }
           
-          logMessage(`🎵 Step 3: Analyzing tempo stability over time...`);
+          logMessage(`🎵 Step 3: Computing Fourier tempogram for detailed tempo analysis...`);
+          
+          // Compute Fourier tempogram for richer tempo analysis
+          const tempogramResult = await computeFourierTempogram(onsetEnvelope, sr);
+          
+          logMessage(`📈 Tempogram computed: ${tempogramResult.frames} time frames, ${tempogramResult.frequencies.length} tempo frequencies`);
+          logMessage(`🎯 Tempogram tempo range: ${tempogramResult.tempoRange.min.toFixed(1)}-${tempogramResult.tempoRange.max.toFixed(1)} BPM`);
+          logMessage(`📊 Peak tempo energies in tempogram:`);
+          
+          for (let i = 0; i < Math.min(tempogramResult.peakTempos.length, 5); i++) {
+            const peak = tempogramResult.peakTempos[i];
+            logMessage(`   ${i+1}. ${peak.bpm.toFixed(1)} BPM (energy: ${peak.energy.toFixed(4)}, frames: ${peak.frameCount})`);
+          }
+          
+          logMessage(`🎵 Step 4: Analyzing tempo stability over time...`);
           
           // Now do windowed analysis but constrained around the global tempo
           const windowSamples = Math.floor(windowSize * sr);
@@ -259,7 +310,8 @@
             tempo: dynamicTempo,
             globalTempo: globalTempo.bpm,
             confidence: globalTempo.confidence,
-            candidates: globalTempo.candidates
+            candidates: globalTempo.candidates,
+            tempogram: tempogramResult
           };
           
         } catch (error) {
@@ -423,6 +475,195 @@
           confidence: confidence,
           score: bestScore,
           candidates: candidates.slice(0, 10) // Top 10 candidates
+        };
+      }
+
+      // Compute Fourier tempogram for detailed tempo analysis
+      async function computeFourierTempogram(onsetEnvelope, sr) {
+        const hopLength = 512;
+        const winLength = 384; // Tempogram window length
+        const hopFrames = Math.floor(winLength / 4);
+        
+        logMessage(`🔧 Tempogram setup: winLength=${winLength}, hopFrames=${hopFrames}`);
+        
+        const frames = Math.floor((onsetEnvelope.length - winLength) / hopFrames) + 1;
+        const tempogram = [];
+        
+        // Create Hann window
+        const window = new Float32Array(winLength);
+        for (let i = 0; i < winLength; i++) {
+          window[i] = 0.5 - 0.5 * Math.cos((2 * Math.PI * i) / (winLength - 1));
+        }
+        
+        logMessage(`📊 Computing ${frames} tempogram frames...`);
+        
+        // Compute tempogram frames
+        for (let i = 0; i < frames; i++) {
+          const start = i * hopFrames;
+          const frame = new Float32Array(winLength);
+          
+          // Apply window to onset envelope segment
+          for (let j = 0; j < winLength && start + j < onsetEnvelope.length; j++) {
+            frame[j] = onsetEnvelope[start + j] * window[j];
+          }
+          
+          // Compute FFT of windowed onset segment
+          const fftFrame = computeSimpleFFT(frame);
+          tempogram.push(fftFrame);
+          
+          // Show progress periodically
+          if (i % Math.max(1, Math.floor(frames / 10)) === 0) {
+            const progress = ((i / frames) * 100).toFixed(0);
+            const frameEnergy = frame.reduce((sum, x) => sum + x*x, 0);
+            logMessage(`   Tempogram ${progress}%: frame ${i}/${frames} (energy: ${frameEnergy.toFixed(3)})`);
+            await new Promise(resolve => setTimeout(resolve, 1));
+          }
+        }
+        
+        // Convert FFT bins to tempo frequencies
+        const tempoFreqs = computeTempoFrequencies(sr, hopLength, winLength);
+        
+        logMessage(`🎼 Tempo frequency range: ${tempoFreqs[1].toFixed(1)}-${tempoFreqs[tempoFreqs.length-1].toFixed(1)} BPM`);
+        
+        // Analyze tempogram for peak tempos
+        const tempogramAnalysis = analyzeTempogram(tempogram, tempoFreqs);
+        
+        logMessage(`📈 Tempogram analysis complete:`);
+        logMessage(`   Dominant frequencies found: ${tempogramAnalysis.peakTempos.length}`);
+        logMessage(`   Total energy: ${tempogramAnalysis.totalEnergy.toFixed(3)}`);
+        logMessage(`   Peak energy ratio: ${(tempogramAnalysis.peakEnergyRatio * 100).toFixed(1)}%`);
+        
+        return {
+          frames: frames,
+          tempogram: tempogram,
+          frequencies: tempoFreqs,
+          tempoRange: {
+            min: tempoFreqs[1],
+            max: tempoFreqs[tempoFreqs.length - 1]
+          },
+          peakTempos: tempogramAnalysis.peakTempos,
+          totalEnergy: tempogramAnalysis.totalEnergy,
+          energyDistribution: tempogramAnalysis.energyDistribution
+        };
+      }
+
+      // Compute tempo frequencies for tempogram
+      function computeTempoFrequencies(sr, hopLength, winLength) {
+        const n = Math.floor(winLength / 2) + 1;
+        const frequencies = new Float32Array(n);
+        
+        for (let i = 0; i < n; i++) {
+          const freq = (i * sr) / (winLength * hopLength); // Hz
+          frequencies[i] = freq * 60.0; // Convert to BPM
+        }
+        
+        return frequencies;
+      }
+
+      // Simple FFT implementation for tempogram
+      function computeSimpleFFT(signal) {
+        const N = signal.length;
+        const result = [];
+        
+        for (let k = 0; k < N; k++) {
+          let real = 0;
+          let imag = 0;
+          
+          // Compute only every 2nd point for speed while maintaining accuracy
+          for (let n = 0; n < N; n += 1) {
+            const angle = (-2 * Math.PI * k * n) / N;
+            real += signal[n] * Math.cos(angle);
+            imag += signal[n] * Math.sin(angle);
+          }
+          
+          result.push({ real, imag });
+        }
+        
+        return result;
+      }
+
+      // Analyze tempogram to find peak tempos and energy distribution
+      function analyzeTempogram(tempogram, tempoFreqs) {
+        const numFrames = tempogram.length;
+        const numFreqs = tempogram[0].length;
+        
+        // Compute magnitude tempogram
+        const magnitudes = [];
+        let totalEnergy = 0;
+        
+        for (let i = 0; i < numFrames; i++) {
+          const frameMagnitudes = [];
+          for (let j = 0; j < numFreqs; j++) {
+            const mag = Math.sqrt(
+              tempogram[i][j].real * tempogram[i][j].real + 
+              tempogram[i][j].imag * tempogram[i][j].imag
+            );
+            frameMagnitudes.push(mag);
+            totalEnergy += mag;
+          }
+          magnitudes.push(frameMagnitudes);
+        }
+        
+        // Find tempo bins with highest average energy
+        const avgEnergyPerTempo = new Float32Array(numFreqs);
+        for (let j = 0; j < numFreqs; j++) {
+          let sum = 0;
+          for (let i = 0; i < numFrames; i++) {
+            sum += magnitudes[i][j];
+          }
+          avgEnergyPerTempo[j] = sum / numFrames;
+        }
+        
+        // Find peaks in tempo energy
+        const tempoPeaks = [];
+        for (let j = 1; j < numFreqs - 1; j++) {
+          const tempo = tempoFreqs[j];
+          
+          // Only consider musical tempo range
+          if (tempo >= 60 && tempo <= 200) {
+            const energy = avgEnergyPerTempo[j];
+            const isLocalMax = energy > avgEnergyPerTempo[j-1] && energy > avgEnergyPerTempo[j+1];
+            
+            if (isLocalMax && energy > 0.01 * Math.max(...avgEnergyPerTempo)) {
+              // Count how many frames this tempo is prominent in
+              let frameCount = 0;
+              for (let i = 0; i < numFrames; i++) {
+                if (magnitudes[i][j] > 0.5 * energy) {
+                  frameCount++;
+                }
+              }
+              
+              tempoPeaks.push({
+                bpm: tempo,
+                energy: energy,
+                bin: j,
+                frameCount: frameCount,
+                prominence: energy / Math.max(...avgEnergyPerTempo)
+              });
+            }
+          }
+        }
+        
+        // Sort by energy
+        tempoPeaks.sort((a, b) => b.energy - a.energy);
+        
+        // Calculate energy distribution statistics
+        const peakEnergy = tempoPeaks.reduce((sum, peak) => sum + peak.energy, 0);
+        const peakEnergyRatio = totalEnergy > 0 ? peakEnergy / totalEnergy : 0;
+        
+        const energyDistribution = {
+          totalEnergy: totalEnergy,
+          peakEnergy: peakEnergy,
+          peakRatio: peakEnergyRatio,
+          numPeaks: tempoPeaks.length
+        };
+        
+        return {
+          peakTempos: tempoPeaks,
+          totalEnergy: totalEnergy,
+          peakEnergyRatio: peakEnergyRatio,
+          energyDistribution: energyDistribution,
+          magnitudes: magnitudes
         };
       }
 
