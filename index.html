@@ -1,0 +1,75 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>Live BPM with XA Tracker</title>
+  <style>
+    body { font-family: sans-serif; text-align: center; padding: 2rem; }
+    #bpm { font-size: 2rem; margin: 1rem 0; }
+    button { font-size: 1rem; margin: 0.5rem; padding: 0.5rem 1rem; }
+  </style>
+</head>
+<body>
+  <h1>Live BPM Detector (XA)</h1>
+  <input type="file" id="fileInput" accept="audio/*" />
+  <div>
+    <button id="playBtn">▶ Play</button>
+    <button id="stopBtn">■ Stop</button>
+  </div>
+  <div id="bpm">BPM: --</div>
+
+  <script type="module">
+    import { BeatTracker } from './xa-beat-tracker.js';
+
+    const fileInput = document.getElementById('fileInput');
+    const playBtn = document.getElementById('playBtn');
+    const stopBtn = document.getElementById('stopBtn');
+    const bpmDisplay = document.getElementById('bpm');
+
+    let audioContext, sourceNode, audioBuffer, intervalId;
+    const tracker = new BeatTracker();
+    let stableBpm = null, lastBpm = null, sameCount = 0;
+
+    fileInput.addEventListener('change', async (e) => {
+      const file = e.target.files[0];
+      if (!file) return;
+      audioContext = new AudioContext();
+      const arrayBuffer = await file.arrayBuffer();
+      audioBuffer = await audioContext.decodeAudioData(arrayBuffer);
+      bpmDisplay.textContent = 'BPM: --';
+    });
+
+    playBtn.onclick = () => {
+      if (!audioBuffer || !audioContext) return;
+      if (sourceNode) sourceNode.stop();
+
+      sourceNode = audioContext.createBufferSource();
+      sourceNode.buffer = audioBuffer;
+      sourceNode.loop = true;
+      sourceNode.connect(audioContext.destination);
+      sourceNode.start();
+
+      intervalId = setInterval(() => {
+        const data = audioBuffer.getChannelData(0);
+        const { tempo } = tracker.beatTrack({ y: data, sr: audioBuffer.sampleRate });
+        const bpm = typeof tempo === 'number' ? tempo.toFixed(2) : Array.isArray(tempo) ? tempo[0].toFixed(2) : '---';
+        bpmDisplay.textContent = `BPM: ${bpm}`;
+        if (lastBpm === bpm) {
+          sameCount++;
+          if (sameCount >= 3) clearInterval(intervalId); // lock in after 3 matches
+        } else {
+          sameCount = 0;
+        }
+        lastBpm = bpm;
+      }, 1000);
+    };
+
+    stopBtn.onclick = () => {
+      if (sourceNode) sourceNode.stop();
+      sourceNode = null;
+      clearInterval(intervalId);
+      bpmDisplay.textContent = 'BPM: --';
+    };
+  </script>
+</body>
+</html>
