@@ -67,7 +67,7 @@
 
         // Get audio data from the first channel
         const audioData = audioBuffer.getChannelData(0);
-        
+
         // Check if we have valid audio data
         console.log('Audio Data Check:', {
           length: audioData.length,
@@ -75,42 +75,49 @@
           firstFewSamples: audioData.slice(0, 5)
         });
 
-        // Try to detect BPM using the tracker instance
-        const { tempo, beats } = tracker.beatTrack({
-          y: audioData,
-          sr: audioBuffer.sampleRate,
-          hopLength: 512,
-          units: 'time',
-          sparse: true
+        // Use Web Worker for beat tracking to prevent UI freeze
+        const worker = new Worker('./beat-worker.js');
+        worker.postMessage({
+          audioData: audioData,
+          sampleRate: audioBuffer.sampleRate
         });
+        bpmDisplay.textContent = 'BPM: Calculating...';
 
-        console.log('Beat Detection Results:', {
-          tempo: tempo,
-          numberOfBeats: beats.length,
-          firstFewBeats: beats.slice(0, 5)
-        });
+        worker.onmessage = (e) => {
+          if (e.data.success) {
+            const { tempo, beats } = e.data;
+            console.log('Beat Detection Results from Worker:', {
+              tempo: tempo,
+              numberOfBeats: beats.length,
+              firstFewBeats: beats.slice(0, 5)
+            });
 
-        if (tempo) {
-          // Stabilize BPM reading
-          if (lastBpm === tempo) {
-            sameCount++;
-            if (sameCount >= 3 && !stableBpm) {
-              stableBpm = tempo;
+            if (tempo) {
+              // Stabilize BPM reading
+              if (lastBpm === tempo) {
+                sameCount++;
+                if (sameCount >= 3 && !stableBpm) {
+                  stableBpm = tempo;
+                }
+              } else {
+                lastBpm = tempo;
+                sameCount = 1;
+              }
+
+              // Display stable BPM if available, otherwise show current
+              const displayBpm = stableBpm || tempo;
+              bpmDisplay.textContent = `BPM: ${typeof displayBpm === 'number' ? displayBpm.toFixed(2) : 'Invalid tempo'}`;
+            } else {
+              bpmDisplay.textContent = 'BPM: No tempo detected';
             }
           } else {
-            lastBpm = tempo;
-            sameCount = 1;
+            console.error('Error in Worker BPM detection:', e.data.error);
+            bpmDisplay.textContent = 'BPM: Error detecting tempo';
           }
-
-          // Display stable BPM if available, otherwise show current
-          const displayBpm = stableBpm || tempo;
-          bpmDisplay.textContent = `BPM: ${typeof displayBpm === 'number' ? displayBpm.toFixed(2) : 'Invalid tempo'}`;
-        } else {
-          bpmDisplay.textContent = 'BPM: No tempo detected';
-        }
+        };
 
       } catch (error) {
-        console.error('Detailed error in BPM detection:', {
+        console.error('Detailed error in BPM detection setup:', {
           name: error.name,
           message: error.message,
           stack: error.stack
