@@ -43,25 +43,34 @@
       if (!audioBuffer || !audioContext) return;
       if (sourceNode) sourceNode.stop();
 
+      // Create and play the audio
       sourceNode = audioContext.createBufferSource();
       sourceNode.buffer = audioBuffer;
       sourceNode.loop = true;
       sourceNode.connect(audioContext.destination);
       sourceNode.start();
 
-      intervalId = setInterval(() => {
-        const data = audioBuffer.getChannelData(0);
-        const { tempo } = tracker.beatTrack({ y: data, sr: audioBuffer.sampleRate });
-        const bpm = typeof tempo === 'number' ? tempo.toFixed(2) : Array.isArray(tempo) ? tempo[0].toFixed(2) : '---';
-        bpmDisplay.textContent = `BPM: ${bpm}`;
-        if (lastBpm === bpm) {
-          sameCount++;
-          if (sameCount >= 3) clearInterval(intervalId); // lock in after 3 matches
+      // Get BPM with proper error handling
+      try {
+        // Get the audio data
+        const audioData = audioBuffer.getChannelData(0);
+        
+        // Use quickBeatTrack to analyze
+        const result = quickBeatTrack(audioData, audioBuffer.sampleRate);
+        
+        // Log the full result to see what we get
+        console.log('Beat tracking result:', result);
+        
+        // Update the display
+        if (result && result.bpm) {
+          bpmDisplay.textContent = `BPM: ${result.bpm.toFixed(2)}`;
         } else {
-          sameCount = 0;
+          bpmDisplay.textContent = 'BPM: No tempo detected';
         }
-        lastBpm = bpm;
-      }, 1000);
+      } catch (error) {
+        console.error('Error detecting BPM:', error);
+        bpmDisplay.textContent = 'BPM: Error detecting tempo';
+      }
     };
 
     stopBtn.onclick = () => {
