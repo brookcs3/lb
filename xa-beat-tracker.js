@@ -21,7 +21,7 @@ export class BeatTracker {
 
   /**
    * Main beat tracking function with dynamic programming
-   * @param {Object} options - Beat tracking parameters
+   * @param {{y, sr: number}} options - Beat tracking parameters
    * @param {Float32Array} options.y - Audio time series
    * @param {number} options.sr - Sample rate (default: 22050)
    * @param {Float32Array} options.onsetEnvelope - Pre-computed onset envelope
@@ -58,7 +58,7 @@ export class BeatTracker {
     }
 
     // Check for any onsets
-    if (!this._hasAnyValue(onset)) {
+    if (!this.hasAnyValue(onset)) {
       console.warn('No onsets detected in audio')
       if (sparse) {
         return { tempo: 0.0, beats: [] }
@@ -80,7 +80,7 @@ export class BeatTracker {
     const tempoArray = typeof tempo === 'number' ? [tempo] : tempo
 
     // Run the beat tracker
-    const beatsBoolean = this._beatTracker(
+    const beatsBoolean = this.beatTracker(
         onset,
         tempoArray,
         sr / hopLength,
@@ -176,7 +176,7 @@ export class BeatTracker {
     const ftgram = this.fourierTempogram(onset, sr, hopLength, winLength)
 
     // Get tempo frequencies
-    const tempoFrequencies = this._fourierTempoFrequencies(
+    const tempoFrequencies = this.fourierTempoFrequencies(
         sr,
         hopLength,
         winLength,
@@ -243,7 +243,7 @@ export class BeatTracker {
     }
 
     // Invert Fourier tempogram
-    const pulse = this._istft(ftgram, 1, winLength, onset.length)
+    const pulse = this.istft(ftgram, 1, winLength, onset.length)
 
     // Keep only positive values
     for (let i = 0; i < pulse.length; i++) {
@@ -251,7 +251,7 @@ export class BeatTracker {
     }
 
     // Normalize
-    return this._normalize(pulse)
+    return this.normalize(pulse)
   }
 
   /**
@@ -261,7 +261,7 @@ export class BeatTracker {
    * @param {number} hopLength - Hop length
    * @returns {Float32Array} Onset strength envelope
    */
-  onsetStrength(y, _sr = 22050, hopLength = 512) {
+  onsetStrength(y, sr = 22050, hopLength = 512) {
     const frameLength = 2048
     const frames = Math.floor((y.length - frameLength) / hopLength) + 1
     const onset = new Float32Array(frames)
@@ -272,7 +272,7 @@ export class BeatTracker {
     for (let i = 0; i < frames; i++) {
       const start = i * hopLength
       // end variable is calculated but not used - keeping for clarity
-      const _end = Math.min(start + frameLength, y.length)
+      const end = Math.min(start + frameLength, y.length)
 
       // Get frame and apply window
       const frame = new Float32Array(frameLength)
@@ -283,7 +283,7 @@ export class BeatTracker {
       }
 
       // Compute magnitude spectrum
-      const spectrum = this._computeMagnitudeSpectrum(frame)
+      const spectrum = this.computeMagnitudeSpectrum(frame)
 
       if (prevSpectrum) {
         // Spectral flux: sum of positive differences
@@ -335,7 +335,7 @@ export class BeatTracker {
     }
 
     // Find peaks with prominence
-    const peaks = this._findPeaksWithProminence(autocorr)
+    const peaks = this.findPeaksWithProminence(autocorr)
 
     if (peaks.length === 0) {
       return startBpm // Fallback to initial guess
@@ -364,7 +364,7 @@ export class BeatTracker {
    * Fourier tempogram computation for advanced tempo analysis
    * @private
    */
-  fourierTempogram(onset, _sr, hopLength, winLength) {
+  fourierTempogram(onset, sr, hopLength, winLength) {
     const hopFrames = Math.floor(winLength / 4)
     const frames = Math.floor((onset.length - winLength) / hopFrames) + 1
     const tempogram = []
@@ -386,7 +386,7 @@ export class BeatTracker {
       }
 
       // FFT
-      const fftFrame = this._fft(frame)
+      const fftFrame = this.fft(frame)
       tempogram.push(fftFrame)
     }
 
@@ -397,7 +397,7 @@ export class BeatTracker {
    * Core beat tracking algorithm using dynamic programming
    * @private
    */
-  _beatTracker(onsetEnvelope, bpm, frameRate, tightness, trim) {
+  beatTracker(onsetEnvelope, bpm, frameRate, tightness, trim) {
     if (bpm.some((b) => b <= 0)) {
       throw new Error('BPM must be strictly positive')
     }
@@ -410,13 +410,13 @@ export class BeatTracker {
     const framesPerBeat = bpm.map((b) => Math.round((frameRate * 60.0) / b))
 
     // Normalize onsets
-    const normalizedOnsets = this._normalizeOnsets(onsetEnvelope)
+    const normalizedOnsets = this.normalizeOnsets(onsetEnvelope)
 
     // Compute local score
-    const localScore = this._beatLocalScore(normalizedOnsets, framesPerBeat)
+    const localScore = this.beatLocalScore(normalizedOnsets, framesPerBeat)
 
     // Run dynamic programming
-    const { backlink, cumScore } = this._beatTrackDP(
+    const { backlink, cumScore } = this.beatTrackDP(
         localScore,
         framesPerBeat,
         tightness,
@@ -424,12 +424,12 @@ export class BeatTracker {
 
     // Reconstruct beat path
     const beats = new Array(onsetEnvelope.length).fill(false)
-    const tail = this._lastBeat(cumScore)
-    this._dpBacktrack(backlink, tail, beats)
+    const tail = this.lastBeat(cumScore)
+    this.dpBacktrack(backlink, tail, beats)
 
     // Trim beats if requested
     if (trim) {
-      return this._trimBeats(localScore, beats)
+      return this.trimBeats(localScore, beats)
     }
 
     return beats
@@ -439,7 +439,7 @@ export class BeatTracker {
    * Normalize onset envelope by standard deviation
    * @private
    */
-  _normalizeOnsets(onsets) {
+  normalizeOnsets(onsets) {
     const mean = onsets.reduce((a, b) => a + b, 0) / onsets.length
     const variance =
         onsets.reduce((a, b) => a + Math.pow(b - mean, 2), 0) /
@@ -453,7 +453,7 @@ export class BeatTracker {
    * Compute local score for beat tracking using Gaussian kernel
    * @private
    */
-  _beatLocalScore(onsetEnvelope, framesPerBeat) {
+  beatLocalScore(onsetEnvelope, framesPerBeat) {
     const N = onsetEnvelope.length
     const localScore = new Float32Array(N)
 
@@ -502,7 +502,7 @@ export class BeatTracker {
    * Dynamic programming for optimal beat sequence
    * @private
    */
-  _beatTrackDP(localScore, framesPerBeat, tightness) {
+  beatTrackDP(localScore, framesPerBeat, tightness) {
     const N = localScore.length
     const backlink = new Int32Array(N)
     const cumScore = new Float32Array(N)
@@ -560,8 +560,8 @@ export class BeatTracker {
    * Find optimal ending beat position
    * @private
    */
-  _lastBeat(cumScore) {
-    const localMax = this._localMax(cumScore)
+  lastBeat(cumScore) {
+    const localMax = this.localMax(cumScore)
     const validScores = []
 
     for (let i = 0; i < cumScore.length; i++) {
@@ -591,7 +591,7 @@ export class BeatTracker {
    * Backtrack through DP solution to find beat sequence
    * @private
    */
-  _dpBacktrack(backlinks, tail, beats) {
+  dpBacktrack(backlinks, tail, beats) {
     let n = tail
     while (n >= 0) {
       beats[n] = true
@@ -603,7 +603,7 @@ export class BeatTracker {
    * Remove spurious beats at beginning and end
    * @private
    */
-  _trimBeats(localScore, beats) {
+  trimBeats(localScore, beats) {
     const trimmed = [...beats]
 
     // Get beat indices
@@ -645,14 +645,14 @@ export class BeatTracker {
   /**
    * Utility methods
    */
-  _computeMagnitudeSpectrum(frame) {
-    const fft = this._fft(frame)
+  computeMagnitudeSpectrum(frame) {
+    const fft = this.fft(frame)
     return fft.map((bin) =>
         Math.sqrt(bin.real * bin.real + bin.imag * bin.imag),
     )
   }
 
-  _findPeaksWithProminence(signal, minProminence = 0.1) {
+  findPeaksWithProminence(signal, minProminence = 0.1) {
     const peaks = []
     const maxVal = Math.max(...signal)
 
@@ -668,7 +668,7 @@ export class BeatTracker {
     return peaks.sort((a, b) => b.prominence - a.prominence)
   }
 
-  _localMax(x) {
+  localMax(x) {
     const maxima = new Array(x.length).fill(false)
 
     for (let i = 1; i < x.length - 1; i++) {
@@ -688,7 +688,7 @@ export class BeatTracker {
     return maxima
   }
 
-  _fft(signal) {
+  fft(signal) {
     // Simplified FFT - replace with proper library like FFTJS for production
     const N = signal.length
     const result = []
@@ -709,7 +709,7 @@ export class BeatTracker {
     return result
   }
 
-  _istft(stft, hopLength, nFft, length) {
+  istft(stft, hopLength, nFft, length) {
     const result = new Float32Array(length)
     const window = new Float32Array(nFft)
 
@@ -720,7 +720,7 @@ export class BeatTracker {
 
     // Overlap-add synthesis
     for (let i = 0; i < stft.length; i++) {
-      const frame = this._ifft(stft[i])
+      const frame = this.ifft(stft[i])
       const start = i * hopLength
 
       for (let j = 0; j < frame.length && start + j < length; j++) {
@@ -731,7 +731,7 @@ export class BeatTracker {
     return result
   }
 
-  _ifft(spectrum) {
+  ifft(spectrum) {
     const N = spectrum.length
     const result = new Float32Array(N)
 
@@ -749,7 +749,7 @@ export class BeatTracker {
     return result
   }
 
-  _fourierTempoFrequencies(sr, hopLength, winLength) {
+  fourierTempoFrequencies(sr, hopLength, winLength) {
     const n = Math.floor(winLength / 2) + 1
     const frequencies = new Float32Array(n)
 
@@ -761,7 +761,7 @@ export class BeatTracker {
     return frequencies
   }
 
-  _normalize(x) {
+  normalize(x) {
     const max = Math.max(...x)
     const min = Math.min(...x)
     const range = max - min
@@ -771,7 +771,7 @@ export class BeatTracker {
     return x.map((v) => (v - min) / range)
   }
 
-  _hasAnyValue(arr) {
+  hasAnyValue(arr) {
     return arr.some((v) => v !== 0)
   }
 }
@@ -873,15 +873,15 @@ export class BeatTrackingUI {
 }
 
 /**
- * Alias matching librosa.beat.beat_track() – convenience wrapper.
+ * Alias matching librosa.beat.beatTrack() – convenience wrapper.
  * Usage:
- *   import { beat_track } from './librosa-beat-tracker.js';
- *   const { tempo, beats } = beat_track(y, 44100, { hopLength: 512 });
+ *   import { beatTrack } from './librosa-beat-tracker.js';
+ *   const { tempo, beats } = beatTrack(y, 44100, { hopLength: 512 });
  *
  * It internally instantiates a BeatTracker and forwards the call.
  */
 
-export function beat_track(y, sr = 22050, opts = {}) {
+export function beatTrack(y, sr = 22050, opts = {}) {
   const tracker = new BeatTracker()
   return tracker.beatTrack({ y, sr, ...opts })
 }
