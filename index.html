@@ -1,137 +1,666 @@
 <!DOCTYPE html>
 <html lang="en">
-<head>
-  <meta charset="UTF-8" />
-  <title>Live BPM with XA Tracker</title>
-  <style>
-    body { font-family: sans-serif; text-align: center; padding: 2rem; }
-    #bpm { font-size: 2rem; margin: 1rem 0; }
-    button { font-size: 1rem; margin: 0.5rem; padding: 0.5rem 1rem; }
-  </style>
-</head>
-<body>
-  <h1>Live BPM Detector (XA)</h1>
-  <input type="file" id="fileInput" accept="audio/*" />
-  <div>
-    <button id="playBtn">▶ Play</button>
-    <button id="stopBtn">■ Stop</button>
-  </div>
-  <div id="bpm">BPM: --</div>
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>BPM Detector</title>
+    <script type="module" defer>
+      import { BeatTracker } from "./xa-beat-tracker.js";
 
-  <script type="module">
-    import { BeatTracker } from './xa-beat-tracker.js';
+      const fileInput = document.getElementById("fileInput");
+      const playBtn = document.getElementById("playBtn");
+      const stopBtn = document.getElementById("stopBtn");
+      const analyzeBtn = document.getElementById("analyzeBtn");
+      const bpmDisplay = document.getElementById("bpm");
+      const logOutput = document.getElementById("logOutput");
 
-    const fileInput = document.getElementById('fileInput');
-    const playBtn = document.getElementById('playBtn');
-    const stopBtn = document.getElementById('stopBtn');
-    const bpmDisplay = document.getElementById('bpm');
+      let audioContext, sourceNode, audioBuffer;
+      const tracker = new BeatTracker();
 
-    let audioContext, sourceNode, audioBuffer, intervalId;
-    const  tracker = new BeatTracker();
-    let stableBpm = null, lastBpm = null, sameCount = 0;
-
-    fileInput.addEventListener('change', async (e) => {
-      const file = e.target.files[0];
-      if (!file) return;
-      audioContext = new AudioContext();
-      const arrayBuffer = await file.arrayBuffer();
-      audioBuffer = await audioContext.decodeAudioData(arrayBuffer);
-      bpmDisplay.textContent = 'BPM: --';
-    });
-
-    playBtn.onclick = () => {
-      if (!audioBuffer || !audioContext) {
-        console.error('No audio buffer or context available');
-        bpmDisplay.textContent = 'BPM: No audio loaded';
-        return;
+      function logMessage(message) {
+        const timestamp = new Date().toLocaleTimeString();
+        logOutput.textContent += `[${timestamp}] ${message}\n`;
+        logOutput.scrollTop = logOutput.scrollHeight;
+        
+        // Also log to console for debugging
+        console.log(`[${timestamp}] ${message}`);
       }
 
-      try {
-        // Stop existing playback if any
-        if (sourceNode) sourceNode.stop();
+      function clearLog() {
+        logOutput.textContent = "";
+      }
 
-        // Log audio buffer details
-        console.log('Audio Buffer Details:', {
-          duration: audioBuffer.duration,
-          numberOfChannels: audioBuffer.numberOfChannels,
-          sampleRate: audioBuffer.sampleRate,
-          length: audioBuffer.length
-        });
+      fileInput.addEventListener("change", async (e) => {
+        const file = e.target.files[0];
+        if (!file) return;
 
-        // Create and setup source node
-        sourceNode = audioContext.createBufferSource();
-        sourceNode.buffer = audioBuffer;
-        sourceNode.loop = true;
-        sourceNode.connect(audioContext.destination);
-        sourceNode.start();
+        try {
+          clearLog();
+          logMessage("Loading audio file...");
+          
+          audioContext = new AudioContext();
+          const arrayBuffer = await file.arrayBuffer();
+          audioBuffer = await audioContext.decodeAudioData(arrayBuffer);
+          
+          bpmDisplay.textContent = "BPM: --";
+          logMessage("✅ Audio file loaded successfully");
+          logMessage(`Duration: ${audioBuffer.duration.toFixed(1)}s, Sample Rate: ${audioBuffer.sampleRate}Hz`);
+          
+          playBtn.disabled = false;
+          analyzeBtn.disabled = false;
+          
+        } catch (error) {
+          console.error("File loading error:", error);
+          bpmDisplay.textContent = "BPM: Error";
+          logMessage("❌ Failed to load file: " + error.message);
+        }
+      });
 
-        // Get audio data from the first channel
-        const audioData = audioBuffer.getChannelData(0);
+      playBtn.onclick = async () => {
+        if (!audioBuffer || !audioContext) {
+          logMessage("❌ No audio loaded");
+          return;
+        }
 
-        // Check if we have valid audio data
-        console.log('Audio Data Check:', {
-          length: audioData.length,
-          hasData: audioData.some(x => x !== 0),
-          firstFewSamples: audioData.slice(0, 5)
-        });
+        try {
+          if (sourceNode) sourceNode.stop();
 
-        // Use Web Worker for beat tracking to prevent UI freeze
-        const worker = new Worker('./beat-worker.js');
-        worker.postMessage({
-          audioData: audioData,
-          sampleRate: audioBuffer.sampleRate
-        });
-        bpmDisplay.textContent = 'BPM: Calculating...';
-
-        worker.onmessage = (e) => {
-          if (e.data.success) {
-            const { tempo, beats } = e.data;
-            console.log('Beat Detection Results from Worker:', {
-              tempo: tempo,
-              numberOfBeats: beats.length,
-              firstFewBeats: beats.slice(0, 5)
-            });
-
-            if (tempo) {
-              // Stabilize BPM reading
-              if (lastBpm === tempo) {
-                sameCount++;
-                if (sameCount >= 3 && !stableBpm) {
-                  stableBpm = tempo;
-                }
-              } else {
-                lastBpm = tempo;
-                sameCount = 1;
-              }
-
-              // Display stable BPM if available, otherwise show current
-              const displayBpm = stableBpm || tempo;
-              bpmDisplay.textContent = `BPM: ${typeof displayBpm === 'number' ? displayBpm.toFixed(2) : 'Invalid tempo'}`;
-            } else {
-              bpmDisplay.textContent = 'BPM: No tempo detected';
-            }
-          } else {
-            console.error('Error in Worker BPM detection:', e.data.error);
-            bpmDisplay.textContent = 'BPM: Error detecting tempo';
+          if (audioContext.state === 'suspended') {
+            await audioContext.resume();
           }
-        };
 
-      } catch (error) {
-        console.error('Detailed error in BPM detection setup:', {
-          name: error.name,
-          message: error.message,
-          stack: error.stack
-        });
-        bpmDisplay.textContent = 'BPM: Error detecting tempo';
+          sourceNode = audioContext.createBufferSource();
+          sourceNode.buffer = audioBuffer;
+          sourceNode.loop = true;
+          sourceNode.connect(audioContext.destination);
+          sourceNode.start();
+
+          logMessage("▶️ Audio playback started");
+          playBtn.disabled = true;
+          stopBtn.disabled = false;
+          
+        } catch (error) {
+          console.error("Playback error:", error);
+          logMessage("❌ Playback failed: " + error.message);
+        }
+      };
+
+      stopBtn.onclick = () => {
+        if (sourceNode) {
+          sourceNode.stop();
+          sourceNode = null;
+        }
+        logMessage("⏹️ Audio playback stopped");
+        playBtn.disabled = false;
+        stopBtn.disabled = true;
+      };
+
+      analyzeBtn.onclick = async () => {
+        if (!audioBuffer) return;
+
+        try {
+          analyzeBtn.disabled = true;
+          playBtn.disabled = true;
+          
+          const y = audioBuffer.getChannelData(0);
+          const sr = audioBuffer.sampleRate;
+
+          // Use simpler, faster analysis for large files
+          const isLargeFile = y.length > sr * 30; // More than 30 seconds
+          const windowSize = isLargeFile ? 8.0 : 4.0;
+          const hopSize = isLargeFile ? 2.0 : 1.0;
+
+          bpmDisplay.textContent = "BPM: Analyzing...";
+          clearLog();
+          logMessage("🔍 Starting BPM analysis");
+          logMessage(`Audio: ${y.length.toLocaleString()} samples (${(y.length/sr).toFixed(1)}s)`);
+          logMessage(`Window: ${windowSize}s, Hop: ${hopSize}s`);
+          
+          if (isLargeFile) {
+            logMessage("⚡ Large file detected - using optimized analysis");
+          }
+
+          const startTime = performance.now();
+          
+          // Run analysis with progress updates
+          const result = await analyzeWithProgress(y, sr, windowSize, hopSize);
+          
+          const analysisTime = (performance.now() - startTime) / 1000;
+
+          if (result.success) {
+            const { times, tempo, globalTempo, confidence, candidates } = result;
+            
+            logMessage(`✅ Analysis completed in ${analysisTime.toFixed(1)}s`);
+            logMessage(`🎯 GLOBAL TEMPO: ${globalTempo.toFixed(1)} BPM (${(confidence * 100).toFixed(1)}% confidence)`);
+            
+            // Show all global candidates
+            logMessage(`🏆 Final global tempo candidates:`);
+            for (let i = 0; i < Math.min(candidates.length, 5); i++) {
+              const candidate = candidates[i];
+              const isWinner = Math.abs(candidate.bpm - globalTempo) < 0.1 ? "👑" : "";
+              logMessage(`   ${i+1}. ${candidate.bpm.toFixed(1)} BPM (score: ${(candidate.boostedScore || candidate.score).toFixed(4)}) ${isWinner}`);
+            }
+            
+            // Calculate tempo stability
+            const deviations = tempo.map(t => Math.abs(t - globalTempo));
+            const avgDeviation = deviations.reduce((a, b) => a + b, 0) / deviations.length;
+            const maxDeviation = Math.max(...deviations);
+            
+            logMessage(`📊 TEMPO STABILITY ANALYSIS:`);
+            logMessage(`   Average deviation: ±${avgDeviation.toFixed(1)} BPM`);
+            logMessage(`   Maximum deviation: ±${maxDeviation.toFixed(1)} BPM`);
+            logMessage(`   Stability windows: ${tempo.filter(t => Math.abs(t - globalTempo) < 3).length}/${tempo.length} stable (±3 BPM)`);
+            
+            // Show stability per window (already shown during analysis)
+            logMessage(`📈 WINDOW-BY-WINDOW SUMMARY:`);
+            const stableCount = tempo.filter(t => Math.abs(t - globalTempo) < 3).length;
+            const moderateCount = tempo.filter(t => Math.abs(t - globalTempo) >= 3 && Math.abs(t - globalTempo) < 8).length;
+            const unstableCount = tempo.filter(t => Math.abs(t - globalTempo) >= 8).length;
+            
+            logMessage(`   ✅ Stable (±3 BPM): ${stableCount} windows`);
+            logMessage(`   ⚠️ Moderate (3-8 BPM): ${moderateCount} windows`);
+            logMessage(`   ❌ Unstable (>8 BPM): ${unstableCount} windows`);
+
+            // Final BPM display
+            const stabilityStatus = avgDeviation < 3 ? "STABLE" : avgDeviation < 8 ? "MODERATE" : "UNSTABLE";
+            bpmDisplay.textContent = `BPM: ${globalTempo.toFixed(1)} (${stabilityStatus})`;
+            
+            logMessage(`🎉 FINAL RESULT:`);
+            if (confidence > 0.7) {
+              logMessage(`   🎯 HIGH CONFIDENCE: This track is ${globalTempo.toFixed(1)} BPM`);
+            } else if (confidence > 0.4) {
+              logMessage(`   ⚠️ MODERATE CONFIDENCE: Track is likely ${globalTempo.toFixed(1)} BPM`);
+            } else {
+              logMessage(`   ❓ LOW CONFIDENCE: Complex/ambiguous tempo, best guess ${globalTempo.toFixed(1)} BPM`);
+            }
+            
+            logMessage(`   📊 Overall stability: ${stabilityStatus} (±${avgDeviation.toFixed(1)} BPM average)`);
+          } else {
+            throw new Error(result.error);
+          }
+
+        } catch (error) {
+          console.error("Analysis error:", error);
+          bpmDisplay.textContent = "BPM: Error";
+          logMessage("❌ Analysis failed: " + error.message);
+        } finally {
+          analyzeBtn.disabled = false;
+          playBtn.disabled = false;
+        }
+      };
+
+      // Improved global tempo estimation
+      async function analyzeWithProgress(y, sr, windowSize, hopSize) {
+        try {
+          logMessage(`🎵 Step 1: Computing onset strength for entire track...`);
+          logMessage(`📊 Track info: ${y.length.toLocaleString()} samples, ${(y.length/sr).toFixed(1)}s duration`);
+          
+          // First, get onset strength for the ENTIRE track (not windowed)
+          const onsetEnvelope = await computeOnsetStrength(y, sr);
+          
+          logMessage(`✅ Onset envelope computed: ${onsetEnvelope.length} frames`);
+          logMessage(`📈 Onset stats: max=${Math.max(...onsetEnvelope).toFixed(3)}, avg=${(onsetEnvelope.reduce((a,b)=>a+b,0)/onsetEnvelope.length).toFixed(3)}`);
+          logMessage(`🎵 Step 2: Finding global tempo candidates...`);
+          
+          // Global tempo estimation using the full onset envelope
+          const globalTempo = await estimateGlobalTempo(onsetEnvelope, sr);
+          
+          logMessage(`🎯 Global tempo: ${globalTempo.bpm.toFixed(1)} BPM (confidence: ${(globalTempo.confidence * 100).toFixed(1)}%)`);
+          logMessage(`🔍 Best correlation score: ${globalTempo.score.toFixed(4)}`);
+          logMessage(`📊 Top tempo candidates:`);
+          
+          for (let i = 0; i < Math.min(globalTempo.candidates.length, 5); i++) {
+            const candidate = globalTempo.candidates[i];
+            logMessage(`   ${i+1}. ${candidate.bpm.toFixed(1)} BPM (score: ${candidate.score.toFixed(4)})`);
+          }
+          
+          logMessage(`🎵 Step 3: Analyzing tempo stability over time...`);
+          
+          // Now do windowed analysis but constrained around the global tempo
+          const windowSamples = Math.floor(windowSize * sr);
+          const hopSamples = Math.floor(hopSize * sr);
+          const numWindows = Math.floor((y.length - windowSamples) / hopSamples);
+          
+          logMessage(`⚙️ Window analysis: ${numWindows} windows, ${windowSize}s each, ${hopSize}s hops`);
+          
+          const dynamicTempo = [];
+          const times = [];
+          
+          for (let i = 0; i < numWindows; i++) {
+            const start = i * hopSamples;
+            const window = y.slice(start, start + windowSamples);
+            
+            // Constrained tempo estimation around global tempo
+            const localResult = await estimateConstrainedTempo(window, sr, globalTempo.bpm, i);
+            
+            dynamicTempo.push(localResult.bpm);
+            times.push(start / sr);
+            
+            // Show every window's result
+            const deviation = Math.abs(localResult.bpm - globalTempo.bpm);
+            const status = deviation < 3 ? "✅" : deviation < 8 ? "⚠️" : "❌";
+            const deviationStr = deviation > 0.1 ? ` (${deviation > 0 ? '+' : ''}${(localResult.bpm - globalTempo.bpm).toFixed(1)})` : '';
+            
+            logMessage(`[${i.toString().padStart(2,'0')}] t=${times[i].toFixed(1)}s → ${localResult.bpm.toFixed(1)} BPM${deviationStr} ${status} (corr: ${localResult.correlation.toFixed(3)})`);
+            
+            // Update display with current progress
+            const progress = ((i / numWindows) * 100).toFixed(0);
+            bpmDisplay.textContent = `BPM: ${globalTempo.bpm.toFixed(1)} (${progress}% analyzed)`;
+            
+            // Yield more frequently to see updates
+            if (i % 2 === 0) {
+              await new Promise(resolve => setTimeout(resolve, 10));
+            }
+          }
+          
+          return { 
+            success: true, 
+            times, 
+            tempo: dynamicTempo,
+            globalTempo: globalTempo.bpm,
+            confidence: globalTempo.confidence,
+            candidates: globalTempo.candidates
+          };
+          
+        } catch (error) {
+          return { success: false, error: error.message };
+        }
       }
-    };
 
-    stopBtn.onclick = () => {
-      if (sourceNode) sourceNode.stop();
-      sourceNode = null;
-      clearInterval(intervalId);
-      bpmDisplay.textContent = 'BPM: --';
-    };
-  </script>
-</body>
+      // Compute onset strength for entire track using spectral flux
+      async function computeOnsetStrength(y, sr) {
+        const frameLength = 2048;
+        const hopLength = 512;
+        const frames = Math.floor((y.length - frameLength) / hopLength) + 1;
+        const onset = new Float32Array(frames);
+        
+        logMessage(`🔧 Onset computation: ${frames} frames, ${frameLength} frame size, ${hopLength} hop`);
+        
+        let prevSpectrum = null;
+        let maxFlux = 0;
+        
+        for (let i = 0; i < frames; i++) {
+          const start = i * hopLength;
+          
+          // Apply Hann window to frame
+          const frame = new Float32Array(frameLength);
+          for (let j = 0; j < frameLength && start + j < y.length; j++) {
+            const windowValue = 0.5 * (1 - Math.cos((2 * Math.PI * j) / (frameLength - 1)));
+            frame[j] = y[start + j] * windowValue;
+          }
+          
+          // Simple magnitude spectrum (avoiding complex FFT)
+          const spectrum = computeSimpleSpectrum(frame);
+          
+          if (prevSpectrum) {
+            // Spectral flux: sum of positive differences
+            let flux = 0;
+            for (let k = 0; k < Math.min(spectrum.length, prevSpectrum.length); k++) {
+              flux += Math.max(0, spectrum[k] - prevSpectrum[k]);
+            }
+            onset[i] = flux;
+            maxFlux = Math.max(maxFlux, flux);
+          } else {
+            onset[i] = 0;
+          }
+          
+          prevSpectrum = spectrum;
+          
+          // Show progress and peek at onset values
+          if (i % 200 === 0) {
+            const progress = ((i / frames) * 100).toFixed(0);
+            logMessage(`   Computing onsets... ${progress}% (frame ${i}/${frames}, flux: ${onset[i].toFixed(3)})`);
+            await new Promise(resolve => setTimeout(resolve, 1));
+          }
+        }
+        
+        logMessage(`📊 Onset envelope: max flux = ${maxFlux.toFixed(3)}`);
+        return onset;
+      }
+
+      // Global tempo estimation with musical constraints
+      async function estimateGlobalTempo(onsetEnvelope, sr) {
+        const hopLength = 512;
+        
+        // Musical tempo constraints (most music falls in this range)
+        const tempoConstraints = {
+          min: 70,    // Ballads, ambient
+          max: 180,   // Fast electronic, punk
+          common: [80, 90, 100, 110, 120, 128, 140, 150, 160, 170] // Common BPMs
+        };
+        
+        // Convert BPM range to lag range for autocorrelation
+        const minLag = Math.floor((60 * sr) / (tempoConstraints.max * hopLength));
+        const maxLag = Math.floor((60 * sr) / (tempoConstraints.min * hopLength));
+        
+        logMessage(`🔍 Searching tempo range: ${tempoConstraints.min}-${tempoConstraints.max} BPM`);
+        logMessage(`📊 Autocorrelation: ${minLag} to ${maxLag} lag frames (${maxLag-minLag+1} calculations)`);
+        
+        // Compute autocorrelation
+        const autocorr = new Float32Array(maxLag - minLag + 1);
+        const candidates = [];
+        
+        for (let lagIdx = 0; lagIdx < autocorr.length; lagIdx++) {
+          const lag = minLag + lagIdx;
+          let corr = 0;
+          let norm = 0;
+          
+          for (let i = 0; i < onsetEnvelope.length - lag; i++) {
+            corr += onsetEnvelope[i] * onsetEnvelope[i + lag];
+            norm += onsetEnvelope[i] * onsetEnvelope[i];
+          }
+          
+          autocorr[lagIdx] = norm > 0 ? corr / norm : 0;
+          
+          // Convert to BPM and store candidate
+          const bpm = (60 * sr) / (lag * hopLength);
+          candidates.push({ bpm, score: autocorr[lagIdx], lag });
+          
+          // Show autocorrelation progress with some values
+          if (lagIdx % 20 === 0) {
+            const progress = ((lagIdx / autocorr.length) * 100).toFixed(0);
+            logMessage(`   Autocorr ${progress}%: lag=${lag} → ${bpm.toFixed(1)} BPM (corr: ${autocorr[lagIdx].toFixed(4)})`);
+            await new Promise(resolve => setTimeout(resolve, 1));
+          }
+        }
+        
+        // Find peaks and apply musical knowledge
+        logMessage(`🎯 Finding tempo peaks with musical constraints...`);
+        
+        let bestBpm = 120;
+        let bestScore = 0;
+        
+        // Sort candidates by score to see top contenders
+        candidates.sort((a, b) => b.score - a.score);
+        
+        logMessage(`📈 Raw autocorrelation peaks:`);
+        for (let i = 0; i < Math.min(10, candidates.length); i++) {
+          const candidate = candidates[i];
+          logMessage(`   ${i+1}. ${candidate.bpm.toFixed(1)} BPM (score: ${candidate.score.toFixed(4)})`);
+        }
+        
+        // Apply musical knowledge boosts
+        for (let i = 0; i < candidates.length; i++) {
+          const candidate = candidates[i];
+          let score = candidate.score;
+          let boost = 1.0;
+          
+          // Boost common tempos
+          for (const commonBpm of tempoConstraints.common) {
+            if (Math.abs(candidate.bpm - commonBpm) < 3) {
+              boost = 1.3; // 30% boost for common tempos
+              break;
+            }
+          }
+          
+          const boostedScore = score * boost;
+          candidate.boostedScore = boostedScore;
+          
+          if (boostedScore > bestScore) {
+            bestScore = boostedScore;
+            bestBpm = candidate.bpm;
+          }
+        }
+        
+        // Sort by boosted score
+        candidates.sort((a, b) => (b.boostedScore || b.score) - (a.boostedScore || a.score));
+        
+        logMessage(`🎵 After musical knowledge boost:`);
+        for (let i = 0; i < Math.min(5, candidates.length); i++) {
+          const candidate = candidates[i];
+          const boost = candidate.boostedScore ? ` (boosted: ${candidate.boostedScore.toFixed(4)})` : '';
+          logMessage(`   ${i+1}. ${candidate.bpm.toFixed(1)} BPM (raw: ${candidate.score.toFixed(4)}${boost})`);
+        }
+        
+        // Calculate confidence based on peak prominence
+        const avgCorr = autocorr.reduce((a, b) => a + b, 0) / autocorr.length;
+        const confidence = Math.min(1.0, Math.max(0, (bestScore - avgCorr) / (avgCorr + 0.001)));
+        
+        logMessage(`📊 Confidence calculation: best=${bestScore.toFixed(4)}, avg=${avgCorr.toFixed(4)} → ${(confidence*100).toFixed(1)}%`);
+        
+        return { 
+          bpm: Math.max(tempoConstraints.min, Math.min(tempoConstraints.max, bestBpm)),
+          confidence: confidence,
+          score: bestScore,
+          candidates: candidates.slice(0, 10) // Top 10 candidates
+        };
+      }
+
+      // Constrained tempo estimation around global tempo
+      async function estimateConstrainedTempo(audioWindow, sampleRate, globalBpm, windowIndex) {
+        // Allow only small deviations from global tempo (±10 BPM)
+        const tolerance = 10;
+        const minBpm = Math.max(70, globalBpm - tolerance);
+        const maxBpm = Math.min(180, globalBpm + tolerance);
+        
+        logMessage(`   [${windowIndex}] Constraint: ${minBpm.toFixed(1)}-${maxBpm.toFixed(1)} BPM around global ${globalBpm.toFixed(1)}`);
+        
+        // Quick energy-based analysis constrained to this range
+        const frameSize = 1024;
+        const hopSize = 256;
+        const onsets = [];
+        let totalEnergy = 0;
+        
+        for (let i = 0; i < audioWindow.length - frameSize; i += hopSize) {
+          let energy = 0;
+          for (let j = i; j < i + frameSize && j < audioWindow.length; j++) {
+            energy += audioWindow[j] * audioWindow[j];
+          }
+          const energySqrt = Math.sqrt(energy);
+          onsets.push(energySqrt);
+          totalEnergy += energySqrt;
+        }
+        
+        const avgEnergy = totalEnergy / onsets.length;
+        logMessage(`   [${windowIndex}] Onset energy: ${onsets.length} frames, avg=${avgEnergy.toFixed(3)}, max=${Math.max(...onsets).toFixed(3)}`);
+        
+        // Simple autocorrelation in constrained range
+        const lagMin = Math.floor(60 * sampleRate / (maxBpm * hopSize));
+        const lagMax = Math.floor(60 * sampleRate / (minBpm * hopSize));
+        
+        logMessage(`   [${windowIndex}] Checking lags ${lagMin}-${lagMax} for tempo candidates...`);
+        
+        let bestBpm = globalBpm;
+        let maxCorr = 0;
+        const correlations = [];
+        
+        for (let lag = lagMin; lag < Math.min(lagMax, onsets.length / 2); lag++) {
+          let corr = 0;
+          let normalization = 0;
+          
+          for (let i = 0; i < onsets.length - lag; i++) {
+            corr += onsets[i] * onsets[i + lag];
+            normalization += onsets[i] * onsets[i];
+          }
+          
+          const normalizedCorr = normalization > 0 ? corr / normalization : 0;
+          const candidateBpm = 60 * sampleRate / (lag * hopSize);
+          
+          correlations.push({ bpm: candidateBpm, correlation: normalizedCorr, lag });
+          
+          if (normalizedCorr > maxCorr && candidateBpm >= minBpm && candidateBpm <= maxBpm) {
+            maxCorr = normalizedCorr;
+            bestBpm = candidateBpm;
+          }
+        }
+        
+        // Show top correlations for this window
+        correlations.sort((a, b) => b.correlation - a.correlation);
+        logMessage(`   [${windowIndex}] Top correlations in window:`);
+        for (let i = 0; i < Math.min(3, correlations.length); i++) {
+          const c = correlations[i];
+          const withinRange = c.bpm >= minBpm && c.bpm <= maxBpm ? "✓" : "✗";
+          logMessage(`       ${c.bpm.toFixed(1)} BPM: ${c.correlation.toFixed(4)} ${withinRange}`);
+        }
+        
+        logMessage(`   [${windowIndex}] Selected: ${bestBpm.toFixed(1)} BPM (correlation: ${maxCorr.toFixed(4)})`);
+        
+        return {
+          bpm: bestBpm,
+          correlation: maxCorr,
+          candidates: correlations.slice(0, 5)
+        };
+      }
+
+      // Simple spectrum computation without full FFT
+      function computeSimpleSpectrum(frame) {
+        const spectrum = new Float32Array(frame.length / 2);
+        
+        // Use a simplified frequency analysis
+        for (let k = 0; k < spectrum.length; k++) {
+          let real = 0, imag = 0;
+          
+          // Sample only every 4th point for speed
+          for (let n = 0; n < frame.length; n += 4) {
+            const angle = (-2 * Math.PI * k * n) / frame.length;
+            real += frame[n] * Math.cos(angle);
+            imag += frame[n] * Math.sin(angle);
+          }
+          
+          spectrum[k] = Math.sqrt(real * real + imag * imag);
+        }
+        
+        return spectrum;
+      }
+
+      // Initialize
+      playBtn.disabled = true;
+      stopBtn.disabled = true;
+      analyzeBtn.disabled = true;
+    </script>
+
+    <style>
+      body {
+        font-family: Arial, sans-serif;
+        max-width: 800px;
+        margin: 0 auto;
+        padding: 2rem;
+        background: #f5f5f5;
+      }
+
+      .container {
+        background: white;
+        padding: 2rem;
+        border-radius: 10px;
+        box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+      }
+
+      h1 {
+        text-align: center;
+        color: #333;
+        margin-bottom: 2rem;
+      }
+
+      #bpm {
+        font-size: 2.5rem;
+        font-weight: bold;
+        text-align: center;
+        margin: 1rem 0;
+        padding: 1rem;
+        background: linear-gradient(135deg, #667eea, #764ba2);
+        color: white;
+        border-radius: 10px;
+      }
+
+      .controls {
+        display: flex;
+        gap: 1rem;
+        justify-content: center;
+        margin: 2rem 0;
+        flex-wrap: wrap;
+      }
+
+      button, input[type="file"] {
+        padding: 0.8rem 1.5rem;
+        border: none;
+        border-radius: 5px;
+        cursor: pointer;
+        font-size: 1rem;
+      }
+
+      button {
+        background: #007bff;
+        color: white;
+      }
+
+      button:disabled {
+        background: #ccc;
+        cursor: not-allowed;
+      }
+
+      button:hover:not(:disabled) {
+        background: #0056b3;
+      }
+
+      #analyzeBtn {
+        background: #28a745;
+      }
+
+      #analyzeBtn:hover:not(:disabled) {
+        background: #218838;
+      }
+
+      #stopBtn {
+        background: #dc3545;
+      }
+
+      #stopBtn:hover:not(:disabled) {
+        background: #c82333;
+      }
+
+      input[type="file"] {
+        margin: 1rem 0;
+        background: #f8f9fa;
+        border: 2px dashed #dee2e6;
+        width: 100%;
+      }
+
+      #logOutput {
+        margin-top: 2rem;
+        padding: 1rem;
+        border: 1px solid #ddd;
+        border-radius: 5px;
+        height: 500px;
+        overflow-y: auto;
+        font-family: monospace;
+        font-size: 0.85rem;
+        background: #f8f9fa;
+        white-space: pre-wrap;
+        line-height: 1.3;
+      }
+
+      @media (max-width: 600px) {
+        body {
+          padding: 1rem;
+        }
+        
+        .controls {
+          flex-direction: column;
+          align-items: center;
+        }
+        
+        button {
+          width: 100%;
+          max-width: 200px;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <div class="container">
+      <h1>🎵 BPM Detector</h1>
+      
+      <div id="bpm">BPM: --</div>
+      
+      <input type="file" id="fileInput" accept="audio/*" />
+      
+      <div class="controls">
+        <button id="playBtn">▶️ Play</button>
+        <button id="stopBtn">⏹️ Stop</button>
+        <button id="analyzeBtn">🔍 Analyze BPM</button>
+      </div>
+
+      <div id="logOutput"></div>
+    </div>
+  </body>
 </html>
