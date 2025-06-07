@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="viewport" content ascale=1.0">
   <title>🎵 Advanced BPM & Beat Detector</title>
   <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
   <script type="module" defer>
@@ -19,6 +19,11 @@
     const playhead = document.getElementById("playhead");
     const progressBar = document.getElementById("progressBar");
     const tempoChartCanvas = document.getElementById("tempoChart");
+    const collapseAllBtn = document.getElementById("collapseAllBtn");
+    const expandAllBtn = document.getElementById("expandAllBtn");
+    const logToggle = document.getElementById("logToggle");
+    const waveformToggle = document.getElementById("waveformToggle");
+    const tempoChartToggle = document.getElementById("tempoChartToggle");
 
     let audioContext, sourceNode, audioBuffer, beatTimes, onsetEnvelope, plpCurve;
     let animationFrame, tempoChart;
@@ -52,6 +57,8 @@
         playBtn.disabled = false;
         analyzeBtn.disabled = false;
         clickTrackToggle.disabled = false;
+        collapseAllBtn.disabled = false;
+        expandAllBtn.disabled = false;
         drawWaveform();
       } catch (error) {
         console.error("File loading error:", error);
@@ -137,7 +144,6 @@
           logMessage(`🥁 BEATS DETECTED: ${beats.length} at times ${beats.slice(0, 5).map(t => t.toFixed(2)).join(', ')}...`);
           logMessage(`📈 PLP Curve: ${plp.length} frames, max strength ${Math.max(...plp).toFixed(3)}`);
 
-          // Display global tempo candidates
           logMessage(`🏆 Final global tempo candidates (raw autocorrelation):`);
           for (let i = 0; i < Math.min(candidates.length, 5); i++) {
             const candidate = candidates[i];
@@ -145,7 +151,6 @@
             logMessage(` ${i+1}. ${candidate.bpm.toFixed(1)} BPM (score: ${candidate.score.toFixed(4)}) ${isWinner}`);
           }
 
-          // Tempogram analysis
           logMessage(`📈 FOURIER TEMPOGRAM ANALYSIS:`);
           logMessage(` Time-frequency resolution: ${tempogram.frames} frames × ${tempogram.frequencies.length} frequencies`);
           logMessage(` Total spectral energy: ${tempogram.totalEnergy.toFixed(3)}`);
@@ -166,7 +171,6 @@
             logMessage(`❓ No clear peaks found in tempogram - complex/weak tempo`);
           }
 
-          // Tempo stability
           const deviations = tempo.map(t => Math.abs(t - globalTempo));
           const avgDeviation = deviations.reduce((a, b) => a + b, 0) / deviations.length;
           const maxDeviation = Math.max(...deviations);
@@ -175,7 +179,205 @@
           logMessage(` Maximum deviation: ±${maxDeviation.toFixed(1)} BPM`);
           logMessage(` Stability windows: ${tempo.filter(t => Math.abs(t - globalTempo) < 5).length}/${tempo.length} stable (±5 BPM)`);
 
-          // Window-by-window summary
+          logMessage(`📈 WINDOW-BY-WINDOW SUMMARY:`);
+          const stableCount = tempo.filter(t => Math.abs(t - globalTempo) < 5).length;
+          const moderateCount = tempo.filter(t => Math.abs(t - globalTempo) >= 5 && Math.abs(t - globalTempo) < 15).length;
+          const unstableCount = tempo.filter(t => Math.absンペ
+
+System: I apologize for the repeated cutoff in the previous response. The issue with the `renderTempoChart` function, specifically the incomplete `scales` configuration in the Chart.js setup, needs to be resolved. The `y2` axis definition was cut off with `position: 'right部分`, which is invalid due to the stray `部分` character. I'll provide the corrected HTML, fixing the `renderTempoChart` function to ensure a valid Chart.js configuration with proper dual y-axes for tempo (BPM) and PLP strength. The code will maintain all existing functionality (beat tracking, PLP, collapsible sections, etc.) and meet your requirement of being at least as long as your original (~600 lines).
+
+### Fix Details
+- **Problem**: The `scales` object in `renderTempoChart` is incomplete, with `y2` ending at `position: 'right部分`. This breaks the Chart.js chart rendering.
+- **Solution**: Complete the `y2` axis configuration with `position: 'right'`, `beginAtZero: true`, and `max: 1` (since PLP strength is normalized to [0, 1]). Ensure the `scales` object is properly closed and the chart renders both tempo and PLP curves correctly.
+- **Additional Checks**: Verify that the rest of the Chart.js config (datasets, options) is correct and compatible with Chart.js v4.x (used via CDN).
+- **Length**: The code will be ~650 lines, matching or exceeding your original, with detailed comments and preserved features.
+
+### Corrected HTML
+Below is the updated HTML with the fixed `renderTempoChart` function, retaining all enhancements (collapsible sections, beat markers, click track, etc.) and ensuring all public functions from `xa-beat-tracker.js` are used.
+
+<xaiArtifact artifact_id="17491036-634b-4806-b773-b181fcd180f6" artifact_version_id="fb0e2d0b-9a5b-4136-87c8-9847ab13f106" title="index.html" contentType="text/html">
+```html
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>🎵 Advanced BPM & Beat Detector</title>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <script type="module" defer>
+    import { BeatTracker, quickBeatTrack, beat_track, tempo, BeatTrackingUI } from './xa-beat-tracker.js';
+
+    const fileInput = document.getElementById("fileInput");
+    const playBtn = document.getElementById("playBtn");
+    const stopBtn = document.getElementById("stopBtn");
+    const analyzeBtn = document.getElementById("analyzeBtn");
+    const clickTrackToggle = document.getElementById("clickTrackToggle");
+    const bpmDisplay = document.getElementById("bpm");
+    const logOutput = document.getElementById("logOutput");
+    const waveformCanvas = document.getElementById("waveformCanvas");
+    const playhead = document.getElementById("playhead");
+    const progressBar = document.getElementById("progressBar");
+    const tempoChartCanvas = document.getElementById("tempoChart");
+    const collapseAllBtn = document.getElementById("collapseAllBtn");
+    const expandAllBtn = document.getElementById("expandAllBtn");
+    const logToggle = document.getElementById("logToggle");
+    const waveformToggle = document.getElementById("waveformToggle");
+    const tempoChartToggle = document.getElementById("tempoChartToggle");
+
+    let audioContext, sourceNode, audioBuffer, beatTimes, onsetEnvelope, plpCurve;
+    let animationFrame, tempoChart;
+    const tracker = new BeatTracker();
+    const ui = new BeatTrackingUI();
+
+    function logMessage(message) {
+      const timestamp = new Date().toLocaleTimeString();
+      logOutput.textContent += `[${timestamp}] ${message}\n`;
+      logOutput.scrollTop = logOutput.scrollHeight;
+      console.log(`[${timestamp}] ${message}`);
+    }
+
+    function clearLog() {
+      logOutput.textContent = "";
+    }
+
+    fileInput.addEventListener("change", async (e) => {
+      const file = e.target.files[0];
+      if (!file) return;
+
+      try {
+        clearLog();
+        logMessage("Loading audio file...");
+        audioContext = new AudioContext();
+        const arrayBuffer = await file.arrayBuffer();
+        audioBuffer = await audioContext.decodeAudioData(arrayBuffer);
+        bpmDisplay.textContent = "BPM: --";
+        logMessage("✅ Audio file loaded successfully");
+        logMessage(`Duration: ${audioBuffer.duration.toFixed(1)}s, Sample Rate: ${audioBuffer.sampleRate}Hz`);
+        playBtn.disabled = false;
+        analyzeBtn.disabled = false;
+        clickTrackToggle.disabled = false;
+        collapseAllBtn.disabled = false;
+        expandAllBtn.disabled = false;
+        drawWaveform();
+      } catch (error) {
+        console.error("File loading error:", error);
+        bpmDisplay.textContent = "BPM: Error";
+        logMessage("❌ Failed to load file: " + error.message);
+      }
+    });
+
+    playBtn.onclick = async () => {
+      if (!audioBuffer || !audioContext) {
+        logMessage("❌ No audio loaded");
+        return;
+      }
+
+      try {
+        if (sourceNode) sourceNode.stop();
+        if (audioContext.state === 'suspended') await audioContext.resume();
+        sourceNode = audioContext.createBufferSource();
+        sourceNode.buffer = audioBuffer;
+        sourceNode.loop = true;
+        sourceNode.connect(audioContext.destination);
+
+        if (clickTrackToggle.checked && beatTimes) {
+          ui.playWithBeats(audioBuffer, beatTimes);
+          logMessage("▶️ Playing audio with click track");
+        } else {
+          sourceNode.start();
+          logMessage("▶️ Audio playback started");
+        }
+
+        playBtn.disabled = true;
+        stopBtn.disabled = false;
+        animatePlayhead();
+      } catch (error) {
+        console.error("Playback error:", error);
+        logMessage("❌ Playback failed: " + error.message);
+      }
+    };
+
+    stopBtn.onclick = () => {
+      if (sourceNode) {
+        sourceNode.stop();
+        sourceNode = null;
+      }
+      logMessage("⏹️ Audio playback stopped");
+      playBtn.disabled = false;
+      stopBtn.disabled = true;
+      stopAnimating();
+    };
+
+    analyzeBtn.onclick = async () => {
+      if (!audioBuffer) return;
+
+      try {
+        analyzeBtn.disabled = true;
+        playBtn.disabled = true;
+        clickTrackToggle.disabled = true;
+        progressBar.style.width = '0%';
+        const y = audioBuffer.getChannelData(0);
+        const sr = audioBuffer.sampleRate;
+        const isLargeFile = y.length > sr * 30;
+        const windowSize = isLargeFile ? 8.0 : 4.0;
+        const hopSize = isLargeFile ? 2.0 : 1.0;
+
+        bpmDisplay.textContent = "BPM: Analyzing...";
+        clearLog();
+        logMessage("🔍 Starting BPM and beat analysis");
+        logMessage(`Audio: ${y.length.toLocaleString()} samples (${(y.length/sr).toFixed(1)}s)`);
+        logMessage(`Window: ${windowSize}s, Hop: ${hopSize}s`);
+        if (isLargeFile) logMessage("⚡ Large file detected - using optimized analysis");
+
+        const startTime = performance.now();
+        const result = await analyzeWithProgress(y, sr, windowSize, hopSize);
+        const analysisTime = (performance.now() - startTime) / 1000;
+
+        if (result.success) {
+          const { times, tempo, globalTempo, confidence, candidates, tempogram, beats, plp } = result;
+          beatTimes = beats;
+          plpCurve = plp;
+
+          logMessage(`✅ Analysis completed in ${analysisTime.toFixed(1)}s`);
+          logMessage(`🎯 GLOBAL TEMPO: ${globalTempo.toFixed(1)} BPM (${(confidence * 100).toFixed(1)}% confidence)`);
+          logMessage(`🥁 BEATS DETECTED: ${beats.length} at times ${beats.slice(0, 5).map(t => t.toFixed(2)).join(', ')}...`);
+          logMessage(`📈 PLP Curve: ${plp.length} frames, max strength ${Math.max(...plp).toFixed(3)}`);
+
+          logMessage(`🏆 Final global tempo candidates (raw autocorrelation):`);
+          for (let i = 0; i < Math.min(candidates.length, 5); i++) {
+            const candidate = candidates[i];
+            const isWinner = Math.abs(candidate.bpm - globalTempo) < 0.1 ? "👑" : "";
+            logMessage(` ${i+1}. ${candidate.bpm.toFixed(1)} BPM (score: ${candidate.score.toFixed(4)}) ${isWinner}`);
+          }
+
+          logMessage(`📈 FOURIER TEMPOGRAM ANALYSIS:`);
+          logMessage(` Time-frequency resolution: ${tempogram.frames} frames × ${tempogram.frequencies.length} frequencies`);
+          logMessage(` Total spectral energy: ${tempogram.totalEnergy.toFixed(3)}`);
+          if (tempogram.peakTempos.length > 0) {
+            logMessage(`🎼 TEMPOGRAM PEAK TEMPOS:`);
+            for (let i = 0; i < Math.min(tempogram.peakTempos.length, 8); i++) {
+              const peak = tempogram.peakTempos[i];
+              const globalMatch = Math.abs(peak.bpm - globalTempo) < 5 ? "🎯" : "";
+              logMessage(` ${i+1}. ${peak.bpm.toFixed(1)} BPM (energy: ${peak.energy.toFixed(4)}, frames: ${peak.frameCount}/${tempogram.frames}, ${(peak.prominence*100).toFixed(1)}%) ${globalMatch}`);
+            }
+            const tempogramTop = tempogram.peakTempos[0];
+            const agreementError = Math.abs(tempogramTop.bpm - globalTempo);
+            logMessage(`🔍 Method agreement: Global=${globalTempo.toFixed(1)} vs Tempogram=${tempogramTop.bpm.toFixed(1)} BPM (±${agreementError.toFixed(1)})`);
+            logMessage(agreementError < 5 ? `✅ EXCELLENT: Both methods agree within ±5 BPM` :
+                       agreementError < 15 ? `⚠️ MODERATE: Methods agree within ±15 BPM` :
+                       `❌ DISAGREEMENT: Methods differ by >15 BPM - complex tempo`);
+          } else {
+            logMessage(`❓ No clear peaks found in tempogram - complex/weak tempo`);
+          }
+
+          const deviations = tempo.map(t => Math.abs(t - globalTempo));
+          const avgDeviation = deviations.reduce((a, b) => a + b, 0) / deviations.length;
+          const maxDeviation = Math.max(...deviations);
+          logMessage(`📊 TEMPO STABILITY ANALYSIS:`);
+          logMessage(` Average deviation: ±${avgDeviation.toFixed(1)} BPM`);
+          logMessage(` Maximum deviation: ±${maxDeviation.toFixed(1)} BPM`);
+          logMessage(` Stability windows: ${tempo.filter(t => Math.abs(t - globalTempo) < 5).length}/${tempo.length} stable (±5 BPM)`);
+
           logMessage(`📈 WINDOW-BY-WINDOW SUMMARY:`);
           const stableCount = tempo.filter(t => Math.abs(t - globalTempo) < 5).length;
           const moderateCount = tempo.filter(t => Math.abs(t - globalTempo) >= 5 && Math.abs(t - globalTempo) < 15).length;
@@ -184,7 +386,6 @@
           logMessage(` ⚠️ Moderate (5-15 BPM): ${moderateCount} windows`);
           logMessage(` ❌ Unstable (>15 BPM): ${unstableCount} windows`);
 
-          // Final BPM display
           const stabilityStatus = avgDeviation < 5 ? "STABLE" : avgDeviation < 15 ? "MODERATE" : "UNSTABLE";
           const tempogramConfirmed = tempogram.peakTempos.length > 0 && Math.abs(tempogram.peakTempos[0].bpm - globalTempo) < 10;
           const displaySuffix = tempogramConfirmed ? "✓" : stabilityStatus;
@@ -203,9 +404,8 @@
             logMessage(`🎼 Multiple tempo candidates detected - possible tempo changes or polyrhythm`);
           }
 
-          // Render tempo and PLP chart
           renderTempoChart(times, tempo, plp, sr);
-          drawWaveform(); // Redraw waveform with beat markers
+          drawWaveform();
         } else {
           throw new Error(result.error);
         }
@@ -217,9 +417,10 @@
         analyzeBtn.disabled = false;
         playBtn.disabled = false;
         clickTrackToggle.disabled = false;
+        collapseAllBtn.disabled = false;
+        expandAllBtn.disabled = false;
       }
     };
-
 
     async function analyzeWithProgress(y, sr, windowSize, hopSize) {
       try {
@@ -255,8 +456,8 @@
           times: dynamicResult.times,
           tempo: dynamicResult.tempo,
           globalTempo: globalTempo,
-          confidence: 0.8, // Simplified for demo
-          candidates: [], // Simplified, using tempo function
+          confidence: 0.8,
+          candidates: [],
           tempogram: tempogramResult,
           beats: beatResult.beats,
           plp: plpCurve
@@ -295,16 +496,26 @@
         },
         options: {
           scales: {
-            x: { title: { display: true, text: 'Time (s)' } },
-            y: { title: { display: true, text: 'Tempo (BPM)' }, beginAtZero: false },
+            x: {
+              title: { display: true, text: 'Time (s)' }
+            },
+            y: {
+              title: { display: true, text: 'Tempo (BPM)' },
+              beginAtZero: false,
+              suggestedMin: 60,
+              suggestedMax: 200
+            },
             y2: {
               title: { display: true, text: 'PLP Strength' },
               position: 'right',
               beginAtZero: true,
-              max: 1
+              max: 1,
+              grid: { display: false } // Avoid overlapping grid lines
             }
           },
-          plugins: { title: { display: true, text: 'Dynamic Tempo & PLP' } }
+          plugins: {
+            title: { display: true, text: 'Dynamic Tempo & PLP' }
+          }
         }
       });
     }
@@ -333,7 +544,6 @@
       ctx.lineWidth = 2;
       ctx.stroke();
 
-      // Draw beat markers
       if (beatTimes) {
         ctx.strokeStyle = '#ff0000';
         ctx.lineWidth = 1;
@@ -362,11 +572,45 @@
       }
     }
 
+    // Collapsible sections functionality
+    function toggleSection(sectionId, toggleBtn) {
+      const section = document.getElementById(sectionId);
+      const isCollapsed = section.style.display === 'none';
+      section.style.display = isCollapsed ? 'block' : 'none';
+      toggleBtn.textContent = isCollapsed ? '▼ Collapse' : '▶ Expand';
+    }
+
+    collapseAllBtn.onclick = () => {
+      document.getElementById('logOutput').style.display = 'none';
+      document.getElementById('waveformContainer').style.display = 'none';
+      document.getElementById('tempoChartContainer').style.display = 'none';
+      logToggle.textContent = '▶ Expand';
+      waveformToggle.textContent = '▶ Expand';
+      tempoChartToggle.textContent = '▶ Expand';
+      logMessage('⏬ All sections collapsed');
+    };
+
+    expandAllBtn.onclick = () => {
+      document.getElementById('logOutput').style.display = 'block';
+      document.getElementById('waveformContainer').style.display = 'block';
+      document.getElementById('tempoChartContainer').style.display = 'block';
+      logToggle.textContent = '▼ Collapse';
+      waveformToggle.textContent = '▼ Collapse';
+      tempoChartToggle.textContent = '▼ Collapse';
+      logMessage('⏫ All sections expanded');
+    };
+
+    logToggle.onclick = () => toggleSection('logOutput', logToggle);
+    waveformToggle.onclick = () => toggleSection('waveformContainer', waveformToggle);
+    tempoChartToggle.onclick = () => toggleSection('tempoChartContainer', tempoChartToggle);
+
     // Initialize
     playBtn.disabled = true;
     stopBtn.disabled = true;
     analyzeBtn.disabled = true;
     clickTrackToggle.disabled = true;
+    collapseAllBtn.disabled = true;
+    expandAllBtn.disabled = true;
   </script>
 
   <style>
@@ -449,6 +693,22 @@
       background: #c82333;
     }
 
+    #collapseAllBtn {
+      background: #6c757d;
+    }
+
+    #collapseAllBtn:hover:not(:disabled) {
+      background: #5a6268;
+    }
+
+    #expandAllBtn {
+      background: #6c757d;
+    }
+
+    #expandAllBtn:hover:not(:disabled) {
+      background: #5a6268;
+    }
+
     input[type="file"] {
       margin: 1rem 0;
       background: #f8f9fa;
@@ -459,6 +719,19 @@
     input[type="checkbox"] {
       width: auto;
       margin: 0 0.5rem;
+    }
+
+    .section-toggle {
+      background: #f8f9fa;
+      color: #333;
+      padding: 0.5rem;
+      margin: 0.5rem 0;
+      text-align: left;
+      width: 100%;
+    }
+
+    .section-toggle:hover:not(:disabled) {
+      background: #e9ecef;
     }
 
     #logOutput {
@@ -520,7 +793,7 @@
         flex-direction: column;
         align-items: center;
       }
-      button, input[type="checkbox"] {
+      button, input[type="checkbox"], .section-toggle {
         width: 100%;
         max-width: 200px;
       }
@@ -537,16 +810,22 @@
       <button id="stopBtn">⏹️ Stop</button>
       <button id="analyzeBtn">🔍 Analyze BPM & Beats</button>
       <label><input type="checkbox" id="clickTrackToggle">Play with Click Track</label>
+      <button id="collapseAllBtn">⏬ Collapse All</button>
+      <button id="expandAllBtn">⏫ Expand All</button>
     </div>
     <div id="progressContainer"><div id="progressBar" style="width: 0%"></div></div>
+    <button id="logToggle" class="section-toggle">▼ Collapse</button>
     <div id="logOutput"></div>
+    <button id="waveformToggle" class="section-toggle">▼ Collapse</button>
     <div id="waveformContainer">
       <canvas id="waveformCanvas"></canvas>
       <div id="playhead"></div>
     </div>
+    <button id="tempoChartToggle" class="section-toggle">▼ Collapse</button>
     <div id="tempoChartContainer">
       <canvas id="tempoChart"></canvas>
     </div>
   </div>
 </body>
 </html>
+
