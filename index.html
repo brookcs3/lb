@@ -6,7 +6,7 @@
   <!-- Include Chart.js for potential tempo chart visualization -->
   <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
   <script type="module" defer>
-    import { BeatTracker, quickBeatTrack } from './xa-beat-tracker.js';
+    import { BeatTracker, quickBeatTrack, BeatTrackingUI } from './xa-beat-tracker.js';
 
     // DOM elements
     const fileInput = document.getElementById("fileInput");
@@ -23,9 +23,10 @@
     const waveformToggle = document.getElementById("waveformToggle");
 
     // State variables
-    let audioContext, sourceNode, audioBuffer;
+    let audioContext, sourceNode, audioBuffer, beatTimes;
     let animationFrame;
     const tracker = new BeatTracker();
+    const ui = new BeatTrackingUI();
 
     // Utility: Log messages with timestamp
     function logMessage(message) {
@@ -184,6 +185,28 @@
           logMessage(` ✅ Stable (±5 BPM): ${stableCount} windows`);
           logMessage(`   ⚠️ Moderate (5-15 BPM): ${moderateCount} windows`);
           logMessage(`   ❌ Unstable (>15 BPM): ${unstableCount} windows`);
+
+          // Beat tracking with beatTrack (uses _beatTrackDP internally)
+          logMessage(`🎵 Performing beat tracking...`);
+          const onsetEnvelope = await computeOnsetStrength(y, sr); // Recompute or reuse if stored
+          const beatResult = tracker.beatTrack({
+            y,
+            sr,
+            onsetEnvelope,
+            hopLength: 512,
+            startBpm: globalTempo,
+            tightness: 100,
+            trim: true,
+            units: 'time',
+            sparse: true
+          });
+          beatTimes = beatResult.beats;
+          logMessage(`🥁 Beat tracking completed: ${beatTimes.length} beats detected`);
+
+          // Generate click track for verification
+          logMessage(`🎵 Generating click track for verification...`);
+          const clickBuffer = ui.generateClickTrack(beatTimes, audioBuffer.duration);
+          logMessage(`✅ Click track generated successfully`);
 
           // Final result display
           const stabilityStatus = avgDeviation < 5 ? "STABLE" : avgDeviation < 15 ? "MODERATE" : "UNSTABLE";
