@@ -36,31 +36,39 @@
     }
 
     fileInput.addEventListener("change", async (e) => {
-      const file = e.target.files[0];
-      if (!file) return;
+  const file = e.target.files[0];
+  if (!file) return;
 
-      try {
-        clearLog();
-        logMessage("Loading audio file...");
-        audioContext = new AudioContext();
-        const arrayBuffer = await file.arrayBuffer();
-        audioBuffer = await audioContext.decodeAudioData(arrayBuffer);
+  // Validate file extension
+  const validExtensions = ['.aif', '.wav', '.mp3', '.m4a'];
+  const fileExtension = file.name.toLowerCase().slice(file.name.lastIndexOf('.'));
+  if (!validExtensions.includes(fileExtension)) {
+    logMessage(`❌ Invalid file type: ${fileExtension}. Please upload an AIF, WAV, MP3, or M4A file.`);
+    bpmDisplay.textContent = "BPM: Invalid file";
+    return;
+  }
 
-        bpmDisplay.textContent = "BPM: --";
-        logMessage("✅ Audio file loaded successfully");
-        logMessage(`Duration: ${audioBuffer.duration.toFixed(1)}s, Sample Rate: ${audioBuffer.sampleRate}Hz`);
+  try {
+    clearLog();
+    logMessage(`Loading audio file: ${file.name} (${fileExtension})...`);
+    audioContext = new AudioContext();
+    const arrayBuffer = await file.arrayBuffer();
+    audioBuffer = await audioContext.decodeAudioData(arrayBuffer);
 
-        playBtn.disabled = false;
-        analyzeBtn.disabled = false;
-        clickTrackToggle.disabled = false;
-        drawWaveform();
-      } catch (error) {
-        console.error("File loading error:", error);
-        bpmDisplay.textContent = "BPM: Error";
-        logMessage("❌ Failed to load file: " + error.message);
-      }
-    });
+    bpmDisplay.textContent = "BPM: --";
+    logMessage("✅ Audio file loaded successfully");
+    logMessage(`Duration: ${audioBuffer.duration.toFixed(1)}s, Sample Rate: ${audioBuffer.sampleRate}Hz`);
 
+    playBtn.disabled = false;
+    analyzeBtn.disabled = false;
+    clickTrackToggle.disabled = false;
+    drawWaveform();
+  } catch (error) {
+    console.error("File loading error:", error);
+    bpmDisplay.textContent = "BPM: Error";
+    logMessage("❌ Failed to load file: " + error.message);
+  }
+});
     playBtn.onclick = async () => {
       if (!audioBuffer || !audioContext) {
         logMessage("❌ No audio loaded");
@@ -1014,7 +1022,7 @@
   <div class="container">
     <h1>🎵 BPM Detector</h1>
     <div id="bpm">BPM: --</div>
-    <input type="file" id="fileInput" accept="audio/*" />
+<input type="file" id="fileInput" accept=".aif,.wav,.mp3,.m4a" />
     <div class="controls">
       <button id="playBtn">▶️ Play</button>
       <button id="stopBtn">⏹️ Stop</button>
