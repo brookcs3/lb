@@ -3,7 +3,6 @@
 <head>
   <meta charset="UTF-8" />
   <title>🎵 BPM Detector</title>
-  <!-- Include Chart.js for potential tempo chart visualization -->
   <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
   <script type="module" defer>
     import { BeatTracker, quickBeatTrack, BeatTrackingUI } from './xa-beat-tracker.js';
@@ -23,8 +22,8 @@
     const waveformToggle = document.getElementById("waveformToggle");
 
     // State variables
-    let audioContext, sourceNode, audioBuffer, beatTimes;
-    let animationFrame;
+    let audioContext, sourceNode, audioBuffer, beatTimes, startTime;
+    let animationFrame, bpmInterval;
     const tracker = new BeatTracker();
     const ui = new BeatTrackingUI();
 
@@ -80,11 +79,13 @@
         sourceNode.buffer = audioBuffer;
         sourceNode.loop = true;
         sourceNode.connect(audioContext.destination);
+        startTime = audioContext.currentTime;
         sourceNode.start();
         logMessage("▶️ Audio playback started");
         playBtn.disabled = true;
         stopBtn.disabled = false;
         drawWaveform();
+        startBpmTracking();
       } catch (error) {
         console.error("Playback error:", error);
         logMessage("❌ Playback failed: " + error.message);
@@ -101,6 +102,7 @@
       playBtn.disabled = false;
       stopBtn.disabled = true;
       stopAnimating();
+      stopBpmTracking();
     };
 
     // Analyze button click handler
@@ -131,7 +133,6 @@
           logMessage(`✅ Analysis completed in ${analysisTime.toFixed(1)}s`);
           logMessage(`🎯 GLOBAL TEMPO: ${globalTempo.toFixed(1)} BPM (${(confidence * 100).toFixed(1)}% confidence)`);
 
-          // Detailed logging for global tempo candidates
           logMessage(`🏆 Final global tempo candidates (raw autocorrelation only):`);
           for (let i = 0; i < Math.min(candidates.length, 5); i++) {
             const candidate = candidates[i];
@@ -139,7 +140,6 @@
             logMessage(` ${i+1}. ${candidate.bpm.toFixed(1)} BPM (score: ${candidate.score.toFixed(4)}) ${isWinner}`);
           }
 
-          // Tempogram analysis logging
           logMessage(`📈 FOURIER TEMPOGRAM ANALYSIS:`);
           logMessage(` Time-frequency resolution: ${tempogram.frames} frames × ${tempogram.frequencies.length} frequencies`);
           logMessage(` Total spectral energy: ${tempogram.totalEnergy.toFixed(3)}`);
@@ -157,18 +157,13 @@
             const agreementError = Math.abs(tempogramTop.bpm - globalTempo);
             logMessage(`🔍 Method agreement: Global=${globalTempo.toFixed(1)} vs Tempogram=${tempogramTop.bpm.toFixed(1)} BPM (±${agreementError.toFixed(1)})`);
 
-            if (agreementError < 5) {
-              logMessage(`✅ EXCELLENT: Both methods agree within ±5 BPM`);
-            } else if (agreementError < 15) {
-              logMessage(`⚠️ MODERATE: Methods agree within ±15 BPM`);
-            } else {
-              logMessage(`❌ DISAGREEMENT: Methods differ by >15 BPM - complex tempo`);
-            }
+            if (agreementError < 5) logMessage(`✅ EXCELLENT: Both methods agree within ±5 BPM`);
+            else if (agreementError < 15) logMessage(`⚠️ MODERATE: Methods agree within ±15 BPM`);
+            else logMessage(`❌ DISAGREEMENT: Methods differ by >15 BPM - complex tempo`);
           } else {
             logMessage(` ❓ No clear peaks found in tempogram - complex/weak tempo`);
           }
 
-          // Tempo stability analysis
           const deviations = tempo.map(t => Math.abs(t - globalTempo));
           const avgDeviation = deviations.reduce((a, b) => a + b, 0) / deviations.length;
           const maxDeviation = Math.max(...deviations);
@@ -177,7 +172,6 @@
           logMessage(` Maximum deviation: ±${maxDeviation.toFixed(1)} BPM`);
           logMessage(` Stability windows: ${tempo.filter(t => Math.abs(t - globalTempo) < 5).length}/${tempo.length} stable (±5 BPM)`);
 
-          // Window-by-window summary
           logMessage(`📈 WINDOW-BY-WINDOW SUMMARY:`);
           const stableCount = tempo.filter(t => Math.abs(t - globalTempo) < 5).length;
           const moderateCount = tempo.filter(t => Math.abs(t - globalTempo) >= 5 && Math.abs(t - globalTempo) < 15).length;
@@ -186,9 +180,8 @@
           logMessage(`   ⚠️ Moderate (5-15 BPM): ${moderateCount} windows`);
           logMessage(`   ❌ Unstable (>15 BPM): ${unstableCount} windows`);
 
-          // Beat tracking with beatTrack (uses _beatTrackDP internally)
           logMessage(`🎵 Performing beat tracking...`);
-          const onsetEnvelope = await computeOnsetStrength(y, sr); // Recompute or reuse if stored
+          const onsetEnvelope = await computeOnsetStrength(y, sr);
           const beatResult = tracker.beatTrack({
             y,
             sr,
@@ -203,12 +196,10 @@
           beatTimes = beatResult.beats;
           logMessage(`🥁 Beat tracking completed: ${beatTimes.length} beats detected`);
 
-          // Generate click track for verification
           logMessage(`🎵 Generating click track for verification...`);
           const clickBuffer = ui.generateClickTrack(beatTimes, audioBuffer.duration);
           logMessage(`✅ Click track generated successfully`);
 
-          // Final result display
           const stabilityStatus = avgDeviation < 5 ? "STABLE" : avgDeviation < 15 ? "MODERATE" : "UNSTABLE";
           const tempogramConfirmed = tempogram.peakTempos.length > 0 && Math.abs(tempogram.peakTempos[0].bpm - globalTempo) < 10;
           const displaySuffix = tempogramConfirmed ? " ✓" : stabilityStatus;
@@ -240,7 +231,49 @@
       }
     };
 
-    // Analysis with progress updates
+    // Calculate local BPM based on beat times
+    function calculateLocalBpm(currentTime) {
+      if (!beatTimes || beatTimes.length < 2) return "--";
+      const playbackTime = currentTime % audioBuffer.duration;
+      let prevBeat = null, nextBeat = null;
+      for (let i = 0; i < beatTimes.length; i++) {
+        if (beatTimes[i] <= playbackTime) prevBeat = beatTimes[i];
+        if (beatTimes[i] > playbackTime) {
+          nextBeat = beatTimes[i];
+          break;
+        }
+      }
+      if (!prevBeat && nextBeat) prevBeat = beatTimes[beatTimes.length - 1];
+      if (!nextBeat && prevBeat) nextBeat = beatTimes[0];
+      if (!prevBeat || !nextBeat) return "--";
+      const interval = nextBeat > prevBeat ? nextBeat - prevBeat : audioBuffer.duration - prevBeat + nextBeat;
+      return (60 / interval).toFixed(1);
+    }
+
+    // Start live BPM tracking
+    function startBpmTracking() {
+      if (!beatTimes) {
+        logMessage("❌ No beat times available for live tracking");
+        return;
+      }
+      bpmInterval = setInterval(() => {
+        const currentTime = audioContext.currentTime - startTime;
+        const localBpm = calculateLocalBpm(currentTime);
+        bpmDisplay.textContent = `BPM: ${localBpm} (Live)`;
+      }, 1000);
+      logMessage("⏲️ Live BPM tracking started");
+    }
+
+    // Stop live BPM tracking
+    function stopBpmTracking() {
+      if (bpmInterval) {
+        clearInterval(bpmInterval);
+        bpmInterval = null;
+        bpmDisplay.textContent = "BPM: --";
+        logMessage("⏲️ Live BPM tracking stopped");
+      }
+    }
+
     async function analyzeWithProgress(y, sr, windowSize, hopSize) {
       try {
         logMessage(`🎵 Step 1: Computing onset strength for entire track...`);
@@ -289,9 +322,7 @@
           logMessage(`[${i.toString().padStart(2,'0')}] t=${times[i].toFixed(1)}s → ${localResult.bpm.toFixed(1)} BPM${deviationStr} ${status} (corr: ${localResult.correlation.toFixed(3)})`);
           const progress = ((i / numWindows) * 100).toFixed(0);
           bpmDisplay.textContent = `BPM: ${globalTempo.bpm.toFixed(1)} (${progress}% analyzed)`;
-          if (i % 2 === 0) {
-            await new Promise(resolve => setTimeout(resolve, 10));
-          }
+          if (i % 2 === 0) await new Promise(resolve => setTimeout(resolve, 10));
         }
 
         return {
@@ -308,7 +339,6 @@
       }
     }
 
-    // Compute onset strength using spectral flux
     async function computeOnsetStrength(y, sr) {
       const frameLength = 2048;
       const hopLength = 512;
@@ -347,14 +377,9 @@
       return onset;
     }
 
-    // Estimate global tempo
     async function estimateGlobalTempo(onsetEnvelope, sr) {
       const hopLength = 512;
-      const tempoConstraints = {
-        min: 70,
-        max: 180,
-        common: [80, 90, 100, 110, 120, 128, 140, 150, 160, 170]
-      };
+      const tempoConstraints = { min: 70, max: 180, common: [80, 90, 100, 110, 120, 128, 140, 150, 160, 170] };
       const minLag = Math.floor((60 * sr) / (tempoConstraints.max * hopLength));
       const maxLag = Math.floor((60 * sr) / (tempoConstraints.min * hopLength));
       logMessage(`🔍 Searching tempo range: ${tempoConstraints.min}-${tempoConstraints.max} BPM`);
@@ -365,8 +390,7 @@
 
       for (let lagIdx = 0; lagIdx < autocorr.length; lagIdx++) {
         const lag = minLag + lagIdx;
-        let corr = 0;
-        let norm = 0;
+        let corr = 0, norm = 0;
         for (let i = 0; i < onsetEnvelope.length - lag; i++) {
           corr += onsetEnvelope[i] * onsetEnvelope[i + lag];
           norm += onsetEnvelope[i] * onsetEnvelope[i];
@@ -385,25 +409,21 @@
       candidates.sort((a, b) => b.score - a.score);
       logMessage(`📈 Raw autocorrelation peaks:`);
       for (let i = 0; i < Math.min(10, candidates.length); i++) {
-        const candidate = candidates[i];
-        logMessage(` ${i+1}. ${candidate.bpm.toFixed(1)} BPM (score: ${candidate.score.toFixed(4)})`);
+        logMessage(` ${i+1}. ${candidates[i].bpm.toFixed(1)} BPM (score: ${candidates[i].score.toFixed(4)})`);
       }
 
-      let bestBpm = 120;
-      let bestScore = 0;
+      let bestBpm = 120, bestScore = 0;
       for (let i = 0; i < candidates.length; i++) {
-        const candidate = candidates[i];
-        if (candidate.score > bestScore) {
-          bestScore = candidate.score;
-          bestBpm = candidate.bpm;
+        if (candidates[i].score > bestScore) {
+          bestScore = candidates[i].score;
+          bestBpm = candidates[i].bpm;
         }
       }
       candidates.sort((a, b) => b.score - a.score);
       logMessage(`🎵 Final ranking by RAW autocorrelation only (no boosts):`);
       for (let i = 0; i < Math.min(5, candidates.length); i++) {
-        const candidate = candidates[i];
-        const isWinner = Math.abs(candidate.bpm - bestBpm) < 0.1 ? " 👑" : "";
-        logMessage(` ${i+1}. ${candidate.bpm.toFixed(1)} BPM (raw score: ${candidate.score.toFixed(4)})${isWinner}`);
+        const isWinner = Math.abs(candidates[i].bpm - bestBpm) < 0.1 ? " 👑" : "";
+        logMessage(` ${i+1}. ${candidates[i].bpm.toFixed(1)} BPM (raw score: ${candidates[i].score.toFixed(4)})${isWinner}`);
       }
 
       const avgCorr = autocorr.reduce((a, b) => a + b, 0) / autocorr.length;
@@ -418,7 +438,6 @@
       };
     }
 
-    // Compute Fourier tempogram
     async function computeFourierTempogram(onsetEnvelope, sr) {
       const hopLength = 512;
       const winLength = 384;
@@ -427,17 +446,13 @@
       const frames = Math.floor((onsetEnvelope.length - winLength) / hopFrames) + 1;
       const tempogram = [];
       const window = new Float32Array(winLength);
-      for (let i = 0; i < winLength; i++) {
-        window[i] = 0.5 - 0.5 * Math.cos((2 * Math.PI * i) / (winLength - 1));
-      }
+      for (let i = 0; i < winLength; i++) window[i] = 0.5 - 0.5 * Math.cos((2 * Math.PI * i) / (winLength - 1));
       logMessage(`📊 Computing ${frames} tempogram frames...`);
 
       for (let i = 0; i < frames; i++) {
         const start = i * hopFrames;
         const frame = new Float32Array(winLength);
-        for (let j = 0; j < winLength && start + j < onsetEnvelope.length; j++) {
-          frame[j] = onsetEnvelope[start + j] * window[j];
-        }
+        for (let j = 0; j < winLength && start + j < onsetEnvelope.length; j++) frame[j] = onsetEnvelope[start + j] * window[j];
         const fftFrame = computeSimpleFFT(frame);
         tempogram.push(fftFrame);
         if (i % Math.max(1, Math.floor(frames / 10)) === 0) {
@@ -467,24 +482,18 @@
       };
     }
 
-    // Compute tempo frequencies
     function computeTempoFrequencies(sr, hopLength, winLength) {
       const n = Math.floor(winLength / 2) + 1;
       const frequencies = new Float32Array(n);
-      for (let i = 0; i < n; i++) {
-        const freq = (i * sr) / (winLength * hopLength);
-        frequencies[i] = freq * 60.0;
-      }
+      for (let i = 0; i < n; i++) frequencies[i] = ((i * sr) / (winLength * hopLength)) * 60.0;
       return frequencies;
     }
 
-    // Simple FFT for tempogram
     function computeSimpleFFT(signal) {
       const N = signal.length;
       const result = [];
       for (let k = 0; k < N; k++) {
-        let real = 0;
-        let imag = 0;
+        let real = 0, imag = 0;
         for (let n = 0; n < N; n += 1) {
           const angle = (-2 * Math.PI * k * n) / N;
           real += signal[n] * Math.cos(angle);
@@ -495,7 +504,6 @@
       return result;
     }
 
-    // Analyze tempogram
     function analyzeTempogram(tempogram, tempoFreqs) {
       const numFrames = tempogram.length;
       const numFreqs = tempogram[0].length;
@@ -515,9 +523,7 @@
       const avgEnergyPerTempo = new Float32Array(numFreqs);
       for (let j = 0; j < numFreqs; j++) {
         let sum = 0;
-        for (let i = 0; i < numFrames; i++) {
-          sum += magnitudes[i][j];
-        }
+        for (let i = 0; i < numFrames; i++) sum += magnitudes[i][j];
         avgEnergyPerTempo[j] = sum / numFrames;
       }
 
@@ -529,16 +535,8 @@
           const isLocalMax = energy > avgEnergyPerTempo[j-1] && energy > avgEnergyPerTempo[j+1];
           if (isLocalMax && energy > 0.01 * Math.max(...avgEnergyPerTempo)) {
             let frameCount = 0;
-            for (let i = 0; i < numFrames; i++) {
-              if (magnitudes[i][j] > 0.5 * energy) frameCount++;
-            }
-            tempoPeaks.push({
-              bpm: tempo,
-              energy,
-              bin: j,
-              frameCount,
-              prominence: energy / Math.max(...avgEnergyPerTempo)
-            });
+            for (let i = 0; i < numFrames; i++) if (magnitudes[i][j] > 0.5 * energy) frameCount++;
+            tempoPeaks.push({ bpm: tempo, energy, bin: j, frameCount, prominence: energy / Math.max(...avgEnergyPerTempo) });
           }
         }
       }
@@ -546,23 +544,15 @@
       tempoPeaks.sort((a, b) => b.energy - a.energy);
       const peakEnergy = tempoPeaks.reduce((sum, peak) => sum + peak.energy, 0);
       const peakEnergyRatio = totalEnergy > 0 ? peakEnergy / totalEnergy : 0;
-      const energyDistribution = {
-        totalEnergy,
-        peakEnergy,
-        peakRatio: peakEnergyRatio,
-        numPeaks: tempoPeaks.length
-      };
-
       return {
         peakTempos: tempoPeaks,
         totalEnergy,
         peakEnergyRatio,
-        energyDistribution,
+        energyDistribution: { totalEnergy, peakEnergy, peakRatio: peakEnergyRatio, numPeaks: tempoPeaks.length },
         magnitudes
       };
     }
 
-    // Constrained tempo estimation
     async function estimateConstrainedTempo(audioWindow, sampleRate, globalBpm, windowIndex) {
       const tolerance = 50;
       const minBpm = Math.max(60, globalBpm - tolerance);
@@ -575,9 +565,7 @@
       let totalEnergy = 0;
       for (let i = 0; i < audioWindow.length - frameSize; i += hopSize) {
         let energy = 0;
-        for (let j = i; j < i + frameSize && j < audioWindow.length; j++) {
-          energy += audioWindow[j] * audioWindow[j];
-        }
+        for (let j = i; j < i + frameSize && j < audioWindow.length; j++) energy += audioWindow[j] * audioWindow[j];
         const energySqrt = Math.sqrt(energy);
         onsets.push(energySqrt);
         totalEnergy += energySqrt;
@@ -589,12 +577,10 @@
       const lagMax = Math.floor(60 * sampleRate / (minBpm * hopSize));
       logMessage(` [${windowIndex}] Checking lags ${lagMin}-${lagMax} for ALL tempo candidates...`);
 
-      let bestBpm = globalBpm;
-      let maxCorr = 0;
+      let bestBpm = globalBpm, maxCorr = 0;
       const correlations = [];
       for (let lag = lagMin; lag < Math.min(lagMax, onsets.length / 2); lag++) {
-        let corr = 0;
-        let normalization = 0;
+        let corr = 0, normalization = 0;
         for (let i = 0; i < onsets.length - lag; i++) {
           corr += onsets[i] * onsets[i + lag];
           normalization += onsets[i] * onsets[i];
@@ -618,14 +604,9 @@
       }
       logMessage(` [${windowIndex}] Selected: ${bestBpm.toFixed(1)} BPM (correlation: ${maxCorr.toFixed(4)})`);
 
-      return {
-        bpm: bestBpm,
-        correlation: maxCorr,
-        candidates: correlations.slice(0, 5)
-      };
+      return { bpm: bestBpm, correlation: maxCorr, candidates: correlations.slice(0, 5) };
     }
 
-    // Simple spectrum computation
     function computeSimpleSpectrum(frame) {
       const spectrum = new Float32Array(frame.length / 2);
       for (let k = 0; k < spectrum.length; k++) {
@@ -640,7 +621,6 @@
       return spectrum;
     }
 
-    // Waveform visualization
     function drawWaveform() {
       if (!audioBuffer) return;
       const canvas = waveformCanvas;
@@ -667,7 +647,7 @@
 
     function animatePlayhead() {
       if (!sourceNode || !audioBuffer) return;
-      const currentTime = audioContext.currentTime;
+      const currentTime = audioContext.currentTime - startTime;
       const playheadPosition = (currentTime % audioBuffer.duration) / audioBuffer.duration * waveformCanvas.width;
       playhead.style.left = `${playheadPosition}px`;
       animationFrame = requestAnimationFrame(animatePlayhead);
@@ -680,7 +660,6 @@
       }
     }
 
-    // Collapsible sections
     function toggleSection(sectionId, toggleBtn) {
       const section = document.getElementById(sectionId);
       const isCollapsed = section.style.display === 'none';
@@ -707,7 +686,6 @@
     logToggle.onclick = () => toggleSection('logOutput', logToggle);
     waveformToggle.onclick = () => toggleSection('waveformContainer', waveformToggle);
 
-    // Initialize buttons
     playBtn.disabled = true;
     stopBtn.disabled = true;
     analyzeBtn.disabled = true;
@@ -723,20 +701,17 @@
       padding: 2rem;
       background: #f5f5f5;
     }
-
     .container {
       background: white;
       padding: 2rem;
       border-radius: 10px;
       box-shadow: 0 2px 10px rgba(0,0,0,0.1);
     }
-
     h1 {
       text-align: center;
       color: #333;
       margin-bottom: 2rem;
     }
-
     #bpm {
       font-size: 2.5rem;
       font-weight: bold;
@@ -747,7 +722,6 @@
       color: white;
       border-radius: 10px;
     }
-
     .controls {
       display: flex;
       gap: 1rem;
@@ -755,7 +729,6 @@
       margin: 2rem 0;
       flex-wrap: wrap;
     }
-
     button, input[type="file"] {
       padding: 0.8rem 1.5rem;
       border: none;
@@ -763,44 +736,35 @@
       cursor: pointer;
       font-size: 1rem;
     }
-
     button {
       background: #007bff;
       color: white;
     }
-
     button:disabled {
       background: #ccc;
       cursor: not-allowed;
     }
-
     button:hover:not(:disabled) {
       background: #0056b3;
     }
-
     #analyzeBtn {
       background: #28a745;
     }
-
     #analyzeBtn:hover:not(:disabled) {
       background: #218838;
     }
-
     #stopBtn {
       background: #dc3545;
     }
-
     #stopBtn:hover:not(:disabled) {
       background: #c82333;
     }
-
     input[type="file"] {
       margin: 1rem 0;
       background: #f8f9fa;
       border: 2px dashed #dee2e6;
       width: 100%;
     }
-
     #logOutput {
       margin-top: 2rem;
       padding: 1rem;
@@ -814,26 +778,22 @@
       white-space: pre-wrap;
       line-height: 1.3;
     }
-
     @media (max-width: 600px) {
       body { padding: 1rem; }
       .controls { flex-direction: column; align-items: center; }
       button { width: 100%; max-width: 200px; }
     }
-
     #waveformContainer {
       margin-top: 2rem;
       background-color: #f8f9fa;
       border-radius: 5px;
       overflow: hidden;
     }
-
     #waveformCanvas {
       display: block;
       width: 100%;
       height: 200px;
     }
-
     #playhead {
       position: absolute;
       top: 0;
@@ -842,7 +802,6 @@
       width: 2px;
       background-color: #ff0000;
     }
-
     .section-toggle {
       background: #f8f9fa;
       color: #333;
@@ -853,7 +812,6 @@
       border: none;
       cursor: pointer;
     }
-
     .section-toggle:hover {
       background: #e9ecef;
     }
