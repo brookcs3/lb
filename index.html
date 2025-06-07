@@ -265,7 +265,7 @@
           const deviationStr = deviation > 0.1 ? ` (${deviation > 0 ? '+' : ''}${(localResult.bpm - globalTempo.bpm).toFixed(1)})` : '';
           logMessage(`[${i.toString().padStart(2,'0')}] t=${times[i].toFixed(1)}s → ${localResult.bpm.toFixed(1)} BPM${deviationStr} ${status} (corr: ${localResult.correlation.toFixed(3)})`);
           const progress = ((i / numWindows) * 100).toFixed(0);
-          bpmDisplay.textContent = `BPM: ${globalTempo.bpm.toFixed(1)} (${progress}% analyzed)`);
+          bpmDisplay.textContent = `BPM: ${globalTempo.bpm.toFixed(1)} (${progress}% analyzed)`;
           if (i % 2 === 0) {
             await new Promise(resolve => setTimeout(resolve, 10));
           }
