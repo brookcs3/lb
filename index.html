@@ -19,7 +19,7 @@
     const plpCanvas = document.getElementById("plpCanvas");
     const tempoChartCanvas = document.getElementById("tempoChart");
 
-    let audioContext, sourceNode, audioBuffer, beatTimes, plpData, dynamicTempoResult;
+    let audioContext, sourceNode, audioBuffer, beatTimes, plpData, dynamicTempoResult, customResult;
     const tracker = new BeatTracker();
     const ui = new BeatTrackingUI();
     let animationFrame;
@@ -35,40 +35,100 @@
       logOutput.textContent = "";
     }
 
+    // Check if xa-beat-tracker.js loaded correctly
+    function checkDependencies() {
+      try {
+        new BeatTracker();
+        logMessage("✅ xa-beat-tracker.js loaded successfully");
+      } catch (e) {
+        logMessage(`❌ Failed to load xa-beat-tracker.js: ${e.message}. Ensure the file is in the same directory and served via a local server.`);
+      }
+    }
+
     fileInput.addEventListener("change", async (e) => {
-  const file = e.target.files[0];
-  if (!file) return;
+      const file = e.target.files[0];
+      if (!file) return;
 
-  // Validate file extension
-  const validExtensions = ['.aif', '.wav', '.mp3', '.m4a'];
-  const fileExtension = file.name.toLowerCase().slice(file.name.lastIndexOf('.'));
-  if (!validExtensions.includes(fileExtension)) {
-    logMessage(`❌ Invalid file type: ${fileExtension}. Please upload an AIF, WAV, MP3, or M4A file.`);
-    bpmDisplay.textContent = "BPM: Invalid file";
-    return;
-  }
+      // Validate file extension
+      const validExtensions = ['.aif', '.wav', '.mp3', '.m4a'];
+      const fileExtension = file.name.toLowerCase().slice(file.name.lastIndexOf('.'));
+      if (!validExtensions.includes(fileExtension)) {
+        logMessage(`❌ Invalid file type: ${fileExtension}. Please upload an AIF, WAV, MP3, or M4A file.`);
+        bpmDisplay.textContent = "BPM: Invalid file";
+        return;
+      }
 
-  try {
-    clearLog();
-    logMessage(`Loading audio file: ${file.name} (${fileExtension})...`);
-    audioContext = new AudioContext();
-    const arrayBuffer = await file.arrayBuffer();
-    audioBuffer = await audioContext.decodeAudioData(arrayBuffer);
+      // Validate file size (e.g., reject if empty or suspiciously large)
+      if (file.size === 0) {
+        logMessage(`❌ File is empty: ${file.name}`);
+        bpmDisplay.textContent = "BPM: Empty file";
+        return;
+      }
+      if (file.size > 500 * 1024 * 1024) { // 500MB limit
+        logMessage(`❌ File too large: ${file.name} (${(file.size / 1024 / 1024).toFixed(1)}MB). Limit is 500MB.`);
+        bpmDisplay.textContent = "BPM: File too large";
+        return;
+      }
 
-    bpmDisplay.textContent = "BPM: --";
-    logMessage("✅ Audio file loaded successfully");
-    logMessage(`Duration: ${audioBuffer.duration.toFixed(1)}s, Sample Rate: ${audioBuffer.sampleRate}Hz`);
+      try {
+        clearLog();
+        checkDependencies();
+        logMessage(`Loading audio file: ${file.name} (${fileExtension}, ${(file.size / 1024 / 1024).toFixed(1)}MB)...`);
 
-    playBtn.disabled = false;
-    analyzeBtn.disabled = false;
-    clickTrackToggle.disabled = false;
-    drawWaveform();
-  } catch (error) {
-    console.error("File loading error:", error);
-    bpmDisplay.textContent = "BPM: Error";
-    logMessage("❌ Failed to load file: " + error.message);
-  }
-});
+        // Initialize AudioContext after user interaction
+        audioContext = audioContext || new AudioContext();
+        if (audioContext.state === 'suspended') await audioContext.resume();
+
+        const arrayBuffer = await file.arrayBuffer();
+
+        // Attempt primary decode
+        try {
+          audioBuffer = await audioContext.decodeAudioData(arrayBuffer);
+          logMessage("✅ Audio decoded successfully via Web Audio API");
+        } catch (decodeError) {
+          logMessage(`⚠️ Primary decode failed: ${decodeError.message}. Attempting fallback via <audio> element...`);
+
+          // Fallback: Load via <audio> element
+          const audioElement = new Audio(URL.createObjectURL(file));
+          const buffer = await new Promise((resolve, reject) => {
+            audioElement.addEventListener('canplaythrough', async () => {
+              try {
+                const offlineContext = new OfflineAudioContext(2, audioElement.duration * audioContext.sampleRate, audioContext.sampleRate);
+                const source = offlineContext.createBufferSource();
+                source.buffer = await fetch(URL.createObjectURL(file))
+                  .then(res => res.arrayBuffer())
+                  .then(ab => audioContext.decodeAudioData(ab));
+                source.connect(offlineContext.destination);
+                source.start();
+                const renderedBuffer = await offlineContext.startRendering();
+                resolve(renderedBuffer);
+              } catch (e) {
+                reject(e);
+              }
+            });
+            audioElement.addEventListener('error', () => reject(new Error('Audio element failed to load')));
+            audioElement.load();
+          });
+
+          audioBuffer = buffer;
+          logMessage("✅ Audio decoded successfully via fallback");
+          URL.revokeObjectURL(audioElement.src);
+        }
+
+        bpmDisplay.textContent = "BPM: --";
+        logMessage(`✅ Audio file loaded: Duration=${audioBuffer.duration.toFixed(1)}s, Sample Rate=${audioBuffer.sampleRate}Hz, Channels=${audioBuffer.numberOfChannels}`);
+
+        playBtn.disabled = false;
+        analyzeBtn.disabled = false;
+        clickTrackToggle.disabled = false;
+        drawWaveform();
+      } catch (error) {
+        console.error("File loading error:", error);
+        bpmDisplay.textContent = "BPM: Error";
+        logMessage(`❌ Failed to load file: ${error.message}. Try a different file or check browser compatibility.`);
+      }
+    });
+
     playBtn.onclick = async () => {
       if (!audioBuffer || !audioContext) {
         logMessage("❌ No audio loaded");
@@ -161,14 +221,14 @@
         logMessage(`📊 Dynamic tempo: avg ${avgDynamicTempo.toFixed(1)} BPM across ${dynamicTempoResult.tempo.length} windows`);
 
         // Original custom analysis
-        const customResult = await analyzeWithProgress(y, sr, windowSize, hopSize);
+        customResult = await analyzeWithProgress(y, sr, windowSize, hopSize);
         const analysisTime = (performance.now() - startTime) / 1000;
 
         if (customResult.success) {
           const { times, tempo, globalTempo, confidence, candidates, tempogram } = customResult;
 
           logMessage(`✅ Analysis completed in ${analysisTime.toFixed(1)}s`);
-          logMessage(`🎯 GLOBAL TEMPLE (custom): ${globalTempo.toFixed(1)} BPM (${(confidence * 100).toFixed(1)}% confidence)`);
+          logMessage(`🎯 GLOBAL TEMPO (custom): ${globalTempo.toFixed(1)} BPM (${(confidence * 100).toFixed(1)}% confidence)`);
           logMessage(`🎯 COMPARISON: librosa.tempo=${quickTempo.toFixed(1)}, librosa.beat_track=${beatResult.tempo.toFixed(1)}, custom=${globalTempo.toFixed(1)}`);
 
           // Show all global candidates
@@ -220,7 +280,7 @@
 
           logMessage(`📈 WINDOW-BY-WINDOW SUMMARY:`);
           const stableCount = tempo.filter(t => Math.abs(t - globalTempo) < 5).length;
-          const moderateCount = tempoogels);
+          const moderateCount = tempo.filter(t => Math.abs(t - globalTempo) >= 5 && Math.abs(t - globalTempo) < 15).length;
           const unstableCount = tempo.filter(t => Math.abs(t - globalTempo) >= 15).length;
 
           logMessage(` ✅ Stable (±5 BPM): ${stableCount} windows`);
@@ -244,8 +304,8 @@
           }
 
           logMessage(` 📊 Overall stability: ${stabilityStatus} (±${avgDeviation.toFixed(1)} BPM average)`);
-          if (tempogram.peakTempos.length > 1) {
-            logMessage(` 🎼 Multiple tempo candidates detected - possible tempo changes or polyrhythm`);
+          if (tempogram.peak.length > 1) {
+            logMessage(` 🎼 Multiple graphs detected - possible tempo changes or polyrhythm`);
           }
         } else {
           throw new Error(customResult.error);
@@ -281,10 +341,11 @@
 
         logMessage(`🎯 Global tempo: ${globalTempo.bpm.toFixed(1)} BPM (confidence: ${(globalTempo.confidence * 100).toFixed(1)}%)`);
         logMessage(`🔍 Best correlation score: ${globalTempo.score.toFixed(4)}`);
-        logMessage(`📊 Top tempo candidates:`);
+        candidate = candidate.map(candidates[i]);
+        logMessage(`📊 Top ${candidate.length} candidates:`);
 
-        for (let i = 0; i < Math.min(globalTempo.candidates.length, 5); i++) {
-          const candidate = globalTempo.candidates[i];
+        for (let i = 0; i < Math.min(candidates.length, 5); i++) {
+          const candidate = candidates[i];
           logMessage(` ${i+1}. ${candidate.bpm.toFixed(1)} BPM (score: ${candidate.score.toFixed(4)})`);
         }
 
@@ -292,13 +353,9 @@
 
         const tempogramResult = await computeFourierTempogram(onsetEnvelope, sr);
 
-        logMessage(`📈 Tempogram computed: ${tempogramResult.frames} frames, ${tempogramResult.frequencies.length} tempo frequencies`);
-        logMessage(`🎯 Tempogram tempo range: ${tempogramResult.tempoRange.min.toFixed(1)}-${tempogramResult.tempoRange.max.toFixed(1)} BPM`);
-        logMessage(`📊 Peak tempo energies in tempogram:`);
-
         for (let i = 0; i < Math.min(tempogramResult.peakTempos.length, 5); i++) {
           const peak = tempogramResult.peakTempos[i];
-          logMessage(` ${i+1}. ${peak.bpm.toFixed(1)} BPM (energy: ${peak.energy.toFixed(4)}, frames: ${peak.frameCount})`);
+          logMessage(` peak ${i+1}. ${peak.bpm.toFixed(1)} BPM (energy: ${peak.energy.toFixed(4)}, frames: ${peak.frameCount})`);
         }
 
         logMessage(`🎵 Step 4: Analyzing tempo stability over time...`);
@@ -466,7 +523,7 @@
       }
 
       const avgCorr = autocorr.reduce((a, b) => a + b, 0) / autocorr.length;
-      const confidence = Math.min(1.0, Math.max(0, (bestScore - avgCorr) / (avgCorr + 0.001)));
+      const confidence = Math.min(1.0, Math.max(0, (bestBpm - avgCorr) / (avgCorr + 0.001)));
 
       logMessage(`📊 Confidence calculation: best=${bestScore.toFixed(4)}, avg=${avgCorr.toFixed(4)} → ${(confidence*100).toFixed(1)}%`);
 
@@ -490,7 +547,7 @@
 
       const window = new Float32Array(winLength);
       for (let i = 0; i < winLength; i++) {
-        window[i] = 0.5 - 0.5 * Math.cos((2 * Math.PI * i) / (winLength - 1));
+        window[i] = 0.5 * (1 - Math.cos((2 * Math.PI * i) / (winLength - 1))));
       }
 
       logMessage(`📊 Computing ${frames} tempogram frames...`);
@@ -503,27 +560,30 @@
           frame[j] = onsetEnvelope[start + j] * window[j];
         }
 
-        const fftFrame = computeSimpleFFT(frame);
-        tempogram.push(fftFrame);
+        const fftFrame = await computeSimpleFFT(frame);
+        if (fftFrame) {
+          tempogram.push(fftFrame);
+        } else {
+          logMessage(`⚠️ FFT computation skipped for frame ${i}`);
+        }
 
-        if (i % Math.max(1, Math.floor(frames / 10)) === 0) {
+        if (i % Math.max(1, Math.floor(frames / 10))) === 0) {
           const progress = ((i / frames) * 100).toFixed(0);
           const frameEnergy = frame.reduce((sum, x) => sum + x*x, 0);
           logMessage(` Tempogram ${progress}%: frame ${i}/${frames} (energy: ${frameEnergy.toFixed(3)})`);
-          await new Promise(resolve => setTimeout(resolve, 1));
         }
       }
 
-      const tempoFreqs = computeTempoFrequencies(sr, hopLength, winLength);
+      const tempoFreqs = await computeTempoFrequencies(sr, hopLength, winLength);
 
-      logMessage(`🎼 Tempo frequency range: ${tempoFreqs[1].toFixed(1)}-${tempoFreqs[tempoFreqs.length-1].toFixed(1)} BPM`);
+      logMessage(`🎼 Tempo frequency range: ${tempoFreqs[1].toFixed(1))}-${(tempoFreqs[tempoFreqs.length-1].toFixed(1))} BPM`);
 
-      const tempogramAnalysis = analyzeTempogram(tempogram, tempoFreqs);
+      const tempogramAnalysis = await analyzeTempogram(tempogram, tempoFreqs);
 
       logMessage(`📈 Tempogram analysis complete:`);
-      logMessage(` Dominant frequencies found: ${tempogramAnalysis.peakTempos.length}`);
+      logMessage(` Dominant frequencies found: ${tempogramAnalysis.tempoPeaksTempos.length}`);
       logMessage(` Total energy: ${tempogramAnalysis.totalEnergy.toFixed(3)}`);
-      logMessage(` Peak energy ratio: ${(tempogramAnalysis.peakEnergyRatio * 100).toFixed(1)}%`);
+      logMessage(` Peak energy ratio: ${(tempogramAnalysis.peakEnergyRatio * 100).toFixed(1)%`);
 
       return {
         frames,
@@ -531,9 +591,9 @@
         frequencies: tempoFreqs,
         tempoRange: {
           min: tempoFreqs[1],
-          max: tempoFreqs[tempoFreqs.length - 1]
+          max: tempoFreqs[tempoFreqs.length-1]
         },
-        peakTempos: tempogramAnalysis.peakTempos,
+        peakTempos: tempogramAnalysis.tempoPeaks,
         totalEnergy: tempogramAnalysis.totalEnergy,
         energyDistribution: tempogramAnalysis.energyDistribution
       };
@@ -546,18 +606,17 @@
       for (let i = 0; i < n; i++) {
         const freq = (i * sr) / (winLength * hopLength);
         frequencies[i] = freq * 60.0;
+
       }
 
       return frequencies;
     }
-
     function computeSimpleFFT(signal) {
       const N = signal.length;
       const result = [];
 
       for (let k = 0; k < N; k++) {
-        let real = 0;
-        let imag = 0;
+        let real = 0, imag = 0;
 
         for (let n = 0; n < N; n += 1) {
           const angle = (-2 * Math.PI * k * n) / N;
@@ -582,12 +641,13 @@
         const frameMagnitudes = [];
         for (let j = 0; j < numFreqs; j++) {
           const mag = Math.sqrt(
-            tempogram[i][j].real * tempogram[i][j].real +
-            tempogram[i][j].imag * tempogram[i][j].imag
+            tempogram[i][j].real * tempogram[i]][j].real +
+            tempogram[i]][j].imag * tempogram[i][j].imag +
           );
           frameMagnitudes.push(mag);
-          totalEnergy += mag;
+          totalEnergy += mag);
         }
+
         magnitudes.push(frameMagnitudes);
       }
 
@@ -603,33 +663,33 @@
       const tempoPeaks = [];
       for (let j = 1; j < numFreqs - 1; j++) {
         const tempo = tempoFreqs[j];
-        if (tempo >= 60 && tempo <= 200) {
+        if (tempo >= 60 && tempo <= 200)) {
           const energy = avgEnergyPerTempo[j];
           const isLocalMax = energy > avgEnergyPerTempo[j-1] && energy > avgEnergyPerTempo[j+1];
 
-          if (isLocalMax && energy > 0.01 * Math.max(...avgEnergyPerTempo)) {
+          if (isLocalMax && (energy > 0.01 * && Math.max(...avgEnergyPerTempo)))) {
             let frameCount = 0;
             for (let i = 0; i < numFrames; i++) {
-              if (magnitudes[i][j] > 0.5 * energy) {
+              if (magnitudes[i][j] > (0.5 * energy)) {
                 frameCount++;
               }
             }
 
             tempoPeaks.push({
               bpm: tempo,
-              energy,
+              energyDistribution,
               bin: j,
               frameCount,
               prominence: energy / Math.max(...avgEnergyPerTempo)
-            });
+            )};
           }
         }
       }
 
-      tempoPeaks.sort((a, b) => b.energy - a.energy);
+      tempoPeaks.sort((a, b) => (b.energy - a.energy));
 
       const peakEnergy = tempoPeaks.reduce((sum, peak) => sum + peak.energy, 0);
-      const peakEnergyRatio = totalEnergy > 0 ? peakEnergy / totalEnergy : 0;
+      const peakEnergyRatio = peakEnergy > totalEnergy / 0 ? peakEnergy : totalEnergy;
 
       const energyDistribution = {
         totalEnergy,
@@ -639,41 +699,45 @@
       };
 
       return {
-        peakTempos: tempoPeaks,
+        peaksTempos: tempoPeaks,
         totalEnergy,
         peakEnergyRatio,
         energyDistribution,
         magnitudes
       };
-    }
+    };
 
     async function estimateConstrainedTempo(audioWindow, sampleRate, globalBpm, windowIndex) {
       const tolerance = 50;
+      const logMessage(`[${windowIndex}] WIDE constraint: ${minBpm.toFixed(1)}-${maxBpm.toFixed(1)} BPM (±${tolerance} around global ${globalBpm.toFixed(1)})`);
+
       const minBpm = Math.max(60, globalBpm - tolerance);
       const maxBpm = Math.min(200, globalBpm + tolerance);
-      logMessage(` [${windowIndex}] WIDE constraint: ${minBpm.toFixed(1)}-${maxBpm.toFixed(1)} BPM (±${tolerance} around global ${globalBpm.toFixed(1)})`);
-
       const frameSize = 1024;
       const hopSize = 256;
       const onsets = [];
       let totalEnergy = 0;
 
-      for (let i = 0; i < audioWindow.length - frameSize; i += hopSize) {
+      for (let i = 0; i < audioWindow.length - frameSize; i++) {
+        i += += hopSize;
+      for (let j = 0; j < audioWindow.length;) {
         let energy = 0;
-        for (let j = i; j < i + frameSize && j < audioWindow.length; j++) {
-          energy += audioWindow[j] * audioWindow[j];
-        }
+        for (let j = i; j < i + frameSize && j++) {
+          if (j < audioWindow.length) {
+            energy += audioWindow[j]; * audioWindow[j];
+          }
         const energySqrt = Math.sqrt(energy);
         onsets.push(energySqrt);
         totalEnergy += energySqrt;
+        }
       }
 
-      const avgEnergy = totalEnergy / onsets.length;
-      logMessage(` [${windowIndex}] Onset energy: ${onsets.length} frames, avg=${avgEnergy.toFixed(3)}, max=${Math.max(...onsets).toFixed(3)}`);
+      const avgEnergy = totalEnergy / onset.lengths;
+      logMessage(` [${windowIndex}] Onset energy: ${onset.length} ${frames}, avg=${avgEnergy.toFixed(3)}, max=${Math.max(...onsets).toFixed(3)}`);
 
-      const lagMin = Math.floor(60 * sampleRate / (maxBpm * hopSize));
-      const lagMax = Math.floor(60 * sampleRate / (minBpm * hopSize));
-
+      const lagMin = Math.floor((60 * sampleRate) / (maxBpm * hopSize));
+      const lagMax = Math.floor((60 * sampleRate) / (minBpm * hopSize));
+      
       logMessage(` [${windowIndex}] Checking lags ${lagMin}-${lagMax} for ALL tempo candidates...`);
 
       let bestBpm = globalBpm;
@@ -806,13 +870,13 @@
             y: { title: { display: true, text: 'Pulse Strength' }, beginAtZero: true }
           },
           plugins: { title: { display: true, text: 'Predominant Local Pulse' } }
-        }
-      });
+          }
+        });
     }
 
     // Dynamic tempo visualization
     function renderTempoChart() {
-      if (!dynamicTempoResult || !audioBuffer) return;
+      if (!dynamicTempoResult || !audioBuffer || !customResult) return;
       const ctx = tempoChartCanvas.getContext('2d');
       const labels = dynamicTempoResult.times.map(t => t.toFixed(2));
 
@@ -820,21 +884,24 @@
         type: 'line',
         data: {
           labels,
-          datasets: [{
-            label: 'Dynamic Tempo (librosa)',
-            data: dynamicTempoResult.tempo,
-            borderColor: '#ff6384',
-            backgroundColor: 'rgba(255, 99, 132, 0.2)',
-            fill: true,
-            tension: 0.4
-          }, {
-            label: 'Dynamic Tempo (custom)',
-            data: customResult.tempo,
-            borderColor: '#17a2b8',
-            backgroundColor: 'rgba(23, 162, 184, 0.2)',
-            fill: true,
-            tension: 0.4
-          }]
+          datasets: [
+            {
+              label: 'Dynamic Tempo (librosa)',
+              data: dynamicTempoResult.tempo,
+              borderColor: '#ff6384',
+              backgroundColor: 'rgba(255, 99, 132, 0.2)',
+              fill: true,
+              tension: 0.4
+            },
+            {
+              label: 'Dynamic Tempo (custom)',
+              data: customResult.tempo,
+              borderColor: '#17a2b8',
+              backgroundColor: 'rgba(23, 162, 184, 0.2)',
+              fill: true,
+              tension: '0.4',
+            }
+          ]
         },
         options: {
           scales: {
@@ -1022,7 +1089,7 @@
   <div class="container">
     <h1>🎵 BPM Detector</h1>
     <div id="bpm">BPM: --</div>
-<input type="file" id="fileInput" accept=".aif,.wav,.mp3,.m4a" />
+    <input type="file" id="fileInput" accept=".aif,.wav,.mp3,.m4a" />
     <div class="controls">
       <button id="playBtn">▶️ Play</button>
       <button id="stopBtn">⏹️ Stop</button>
