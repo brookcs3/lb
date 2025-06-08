@@ -819,7 +819,7 @@ export class BeatTrackingUI {
    * @param {number} clickFreq - Click frequency in Hz
    * @returns {AudioBuffer} Click track buffer
    */
-  generateClickTrack(beats, duration, clickFreq = 880) {
+  generateClickTrack(beats, duration, clickFreq = 880, offset = 0) {
     if (!this.audioContext) return null
 
     const sampleRate = this.audioContext.sampleRate
@@ -827,16 +827,22 @@ export class BeatTrackingUI {
     const clickBuffer = this.audioContext.createBuffer(1, samples, sampleRate)
     const channelData = clickBuffer.getChannelData(0)
 
-    beats.forEach((beatTime) => {
-      const startSample = Math.floor(beatTime * sampleRate)
+    beats.forEach((beatTime, beatIndex) => {
+      const adjustedBeatTime = beatTime + offset; // Apply manual offset
+      const startSample = Math.floor(adjustedBeatTime * sampleRate)
       const clickDuration = 0.1 // 100ms click
       const clickSamples = Math.floor(clickDuration * sampleRate)
+
+      // Determine if this is a downbeat (every 4th beat)
+      const isDownbeat = beatIndex % 4 === 0
+      const frequency = isDownbeat ? clickFreq * 2 : clickFreq // Higher pitch for downbeat
+      const volume = isDownbeat ? 0.8 : 0.5 // Louder for downbeat
 
       for (let i = 0; i < clickSamples && startSample + i < samples; i++) {
         const t = i / sampleRate
         const envelope = Math.exp(-t * 20) // Decay envelope
         channelData[startSample + i] =
-            0.3 * envelope * Math.sin(2 * Math.PI * clickFreq * t)
+            volume * envelope * Math.sin(2 * Math.PI * frequency * t)
       }
     })
 
