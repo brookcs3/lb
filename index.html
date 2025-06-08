@@ -238,7 +238,12 @@
           logMessage(`🥁 Beat tracking completed: ${beatTimes.length} beats detected`);
 
           logMessage(`🎵 Generating click track for verification...`);
-          clickBuffer = ui.generateClickTrack(beatTimes, audioBuffer.duration);
+          clickBuffer = ui.generateClickTrack(
+            beatTimes,
+            audioBuffer.duration,
+            undefined,
+            beatOffset
+          );
           logMessage(`✅ Click track generated successfully`);
           clickBtn.disabled = false; // Enable click track button
 
@@ -306,7 +311,12 @@
           beatTimes = result.beats;
           globalTempo = parseFloat(result.bpm.toFixed(1));
           bpmDisplay.textContent = `BPM: ${globalTempo} (QUICK)`;
-          clickBuffer = ui.generateClickTrack(beatTimes, audioBuffer.duration);
+          clickBuffer = ui.generateClickTrack(
+            beatTimes,
+            audioBuffer.duration,
+            undefined,
+            beatOffset
+          );
           clickBtn.disabled = false;
           logMessage(`✅ Quick BPM: ${globalTempo} BPM`);
           logMessage(`Detected ${beatTimes.length} beats`);
