@@ -60,6 +60,15 @@
       try {
         clearLog();
         logMessage("Loading audio file...");
+        
+        // Clear previous analysis data
+        clickBuffer = null;
+        beatTimes = null;
+        globalTempo = 120;
+        clickBtn.disabled = true;
+        clickEnabled = false;
+        clickBtn.textContent = "🔇 Click Track";
+        
         audioContext = new AudioContext();
         const arrayBuffer = await file.arrayBuffer();
         audioBuffer = await audioContext.decodeAudioData(arrayBuffer);
@@ -234,10 +243,32 @@
           });
           beatTimes = beatResult.beats;
           logMessage(`🥁 Beat tracking completed: ${beatTimes.length} beats detected`);
+          
+          // Debug: Calculate actual click tempo
+          if (beatTimes.length > 1) {
+            const avgInterval = (beatTimes[beatTimes.length - 1] - beatTimes[0]) / (beatTimes.length - 1);
+            const clickTempo = 60 / avgInterval;
+            logMessage(`🎵 Click track tempo: ${clickTempo.toFixed(1)} BPM (based on beat intervals)`);
+            logMessage(`📊 Expected tempo: ${globalTempo} BPM`);
+            if (Math.abs(clickTempo - globalTempo) > 5) {
+              logMessage(`⚠️ TEMPO MISMATCH: Click track will sound ${clickTempo < globalTempo ? 'slower' : 'faster'} than expected`);
+            }
+          }
 
           logMessage(`🎵 Generating click track for verification...`);
-          clickBuffer = ui.generateClickTrack(beatTimes, audioBuffer.duration);
-          logMessage(`✅ Click track generated successfully`);
+          
+          // Fix tempo mismatch: Generate click track from BPM instead of beat times
+          const properBeatTimes = [];
+          const beatInterval = 60 / globalTempo; // Seconds per beat
+          for (let t = 0; t < audioBuffer.duration; t += beatInterval) {
+            properBeatTimes.push(t);
+          }
+          
+          clickBuffer = ui.generateClickTrack(properBeatTimes, audioBuffer.duration);
+          logMessage(`✅ Click track generated at ${globalTempo} BPM (${properBeatTimes.length} beats)`);
+          
+          // Keep original beatTimes for other uses, but use properBeatTimes for clicks
+          beatTimes = properBeatTimes;
           clickBtn.disabled = false; // Enable click track button
 
           // Better status labeling
