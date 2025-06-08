@@ -12,6 +12,7 @@
     const playBtn = document.getElementById("playBtn");
     const stopBtn = document.getElementById("stopBtn");
     const analyzeBtn = document.getElementById("analyzeBtn");
+    const quickAnalyzeBtn = document.getElementById("quickAnalyzeBtn");
     const clickBtn = document.getElementById("clickBtn");
     const beatOffsetSlider = document.getElementById("beatOffset");
     const offsetDisplay = document.getElementById("offsetDisplay");
@@ -68,6 +69,7 @@
         logMessage(`Duration: ${audioBuffer.duration.toFixed(1)}s, Sample Rate: ${audioBuffer.sampleRate}Hz`);
         playBtn.disabled = false;
         analyzeBtn.disabled = false;
+        quickAnalyzeBtn.disabled = false;
         collapseAllBtn.disabled = false;
         expandAllBtn.disabled = false;
       } catch (error) {
@@ -280,7 +282,44 @@
         console.error("Analysis error:", error);
         bpmDisplay.textContent = "BPM: Error";
         logMessage("❌ Analysis failed: " + error.message);
+
       } finally {
+        analyzeBtn.disabled = false;
+        playBtn.disabled = false;
+      }
+    };
+
+    // Quick Analyze button click handler
+    quickAnalyzeBtn.onclick = () => {
+      if (!audioBuffer) return;
+      try {
+        quickAnalyzeBtn.disabled = true;
+        analyzeBtn.disabled = true;
+        playBtn.disabled = true;
+        bpmDisplay.textContent = "BPM: Quick...";
+        clearLog();
+        logMessage("⚡ Quick BPM analysis");
+        const y = audioBuffer.getChannelData(0);
+        const sr = audioBuffer.sampleRate;
+        const result = quickBeatTrack(y, sr);
+        if (result.beats.length > 0) {
+          beatTimes = result.beats;
+          globalTempo = parseFloat(result.bpm.toFixed(1));
+          bpmDisplay.textContent = `BPM: ${globalTempo} (QUICK)`;
+          clickBuffer = ui.generateClickTrack(beatTimes, audioBuffer.duration);
+          clickBtn.disabled = false;
+          logMessage(`✅ Quick BPM: ${globalTempo} BPM`);
+          logMessage(`Detected ${beatTimes.length} beats`);
+        } else {
+          bpmDisplay.textContent = "BPM: --";
+          logMessage("❌ Quick analysis failed");
+        }
+      } catch (error) {
+        console.error("Quick analysis error:", error);
+        bpmDisplay.textContent = "BPM: Error";
+        logMessage("❌ Quick analysis failed: " + error.message);
+      } finally {
+        quickAnalyzeBtn.disabled = false;
         analyzeBtn.disabled = false;
         playBtn.disabled = false;
       }
@@ -1106,6 +1145,12 @@
     #analyzeBtn:hover:not(:disabled) {
       background: #218838;
     }
+    #quickAnalyzeBtn {
+      background: #17a2b8;
+    }
+    #quickAnalyzeBtn:hover:not(:disabled) {
+      background: #138496;
+    }
     #stopBtn {
       background: #dc3545;
     }
@@ -1229,6 +1274,7 @@
       <button id="playBtn">▶️ Play</button>
       <button id="stopBtn">⏹️ Stop</button>
       <button id="analyzeBtn">🔍 Analyze BPM</button>
+      <button id="quickAnalyzeBtn" disabled>⚡ Quick Analyze</button>
       <button id="clickBtn">🔇 Click Track</button>
       <button id="collapseAllBtn">⏬ Collapse All</button>
       <button id="expandAllBtn">⏫ Expand All</button>
