@@ -53,6 +53,15 @@
       logOutput.textContent = "";
     }
 
+    // Catch unexpected promise rejections to keep the UI responsive
+    window.addEventListener('unhandledrejection', (event) => {
+      console.error('Unhandled promise rejection:', event.reason);
+      logMessage('❌ Unexpected error: ' + (event.reason && event.reason.message ? event.reason.message : event.reason));
+      analyzeBtn.disabled = false;
+      quickAnalyzeBtn.disabled = false;
+      playBtn.disabled = false;
+    });
+
     // Handle file input change
     fileInput.addEventListener("change", async (e) => {
       const file = e.target.files[0];
@@ -724,10 +733,11 @@
           tempogram: tempogramResult,
           onsetEnvelope: globalOnsetEnvelope // Include for reuse
         };
-      } catch (error) {
-        return { success: false, error: error.message };
+        } catch (error) {
+          console.error('analyzeWithProgress error:', error);
+          return { success: false, error: error.message };
+        }
       }
-    }
 
     async function computeOnsetStrength(y, sr) {
       const frameLength = 2048;
