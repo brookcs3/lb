@@ -5,7 +5,7 @@
   <title>🎵 BPM Detector</title>
   <!-- Chart.js removed: the application draws the waveform manually -->
   <script type="module" defer>
-    import { BeatTracker, quickBeatTrack, BeatTrackingUI } from './xa-beat-tracker.js';
+    import { BeatTracker, quickBeatTrack, BeatTrackingUI, dynamicBeatTrack } from './xa-beat-tracker.js';
 
     // DOM elements
     const fileInput = document.getElementById("fileInput");
@@ -231,20 +231,10 @@
           logMessage(`   ⚠️ Moderate (5-15 BPM): ${moderateCount} windows`);
           logMessage(`   ❌ Unstable (>15 BPM): ${unstableCount} windows`);
 
-          logMessage(`🎵 Performing beat tracking (reusing onset envelope)...`);
-          const beatResult = tracker.beatTrack({
-            y,
-            sr,
-            onsetEnvelope: onsetEnvelope,
-            hopLength: 512,
-            startBpm: globalTempo,
-            tightness: 100,
-            trim: true,
-            units: 'time',
-            sparse: true
-          });
-          beatTimes = beatResult.beats;
-          logMessage(`🥁 Beat tracking completed: ${beatTimes.length} beats detected`);
+          logMessage(`🎵 Performing dynamic beat tracking...`);
+          const dynamicResult = dynamicBeatTrack(y, sr, windowSize, hopSize);
+          beatTimes = dynamicResult.beats;
+          logMessage(`🥁 Beat tracking completed: ${beatTimes.length} beats detected (dynamic tempo)`);
 
           logMessage(`🎵 Generating click track for verification...`);
           clickBuffer = ui.generateClickTrack(beatTimes, audioBuffer.duration);
