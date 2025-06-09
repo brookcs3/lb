@@ -73,6 +73,8 @@
         clearLog();
         logMessage("Loading audio file...");
         audioContext = new AudioContext();
+        ui.audioContext = audioContext; // ensure click track uses same context
+        ui.tracker.audioContext = audioContext;
         const arrayBuffer = await file.arrayBuffer();
         audioBuffer = await audioContext.decodeAudioData(arrayBuffer);
         bpmDisplay.textContent = "BPM: --";
