@@ -5,7 +5,7 @@
   <title>🎵 BPM Detector</title>
   <!-- Chart.js removed: the application draws the waveform manually -->
   <script type="module" defer>
-    import { BeatTracker, quickBeatTrack, BeatTrackingUI, beat_track, tempo } from './xa-beat-tracker.js';
+    import { BeatTracker, quickBeatTrack, BeatTrackingUI, dynamicBeatTrack, beat_track, tempo } from './xa-beat-tracker.js';
 
     // DOM elements
     const fileInput = document.getElementById("fileInput");
@@ -16,9 +16,6 @@
     const beatTrackBtn = document.getElementById("beatTrackBtn");
     const tempoBtn = document.getElementById("tempoBtn");
     const clickBtn = document.getElementById("clickBtn");
-    // const beatOffsetSlider = document.getElementById("beatOffset");
-    // const offsetDisplay = document.getElementById("offsetDisplay");
-    // const resetOffsetBtn = document.getElementById("resetOffset");
     const bpmDisplay = document.getElementById("bpm");
     const logOutput = document.getElementById("logOutput");
     const waveformCanvas = document.getElementById("waveformCanvas");
@@ -38,9 +35,15 @@
     let clickSourceNode = null; // Click track audio source
     let clickEnabled = false; // Toggle for click track
     let clickPulseInterval = null; // Interval for button pulsing
-    // let beatOffset = 0; // Manual beat timing offset in seconds
     const tracker = new BeatTracker();
     const ui = new BeatTrackingUI();
+
+    // Regenerate the click track whenever beat times are updated
+    function updateClickBuffer() {
+      if (audioBuffer && beatTimes && beatTimes.length > 0) {
+        clickBuffer = ui.generateClickTrack(beatTimes, audioBuffer.duration);
+      }
+    }
 
     // Utility: Log messages with timestamp
     function logMessage(message) {
@@ -112,6 +115,9 @@
         // Set up live audio analysis
         setupLiveAnalysis();
         
+        // Ensure click track is current
+        updateClickBuffer();
+
         // Start click track if enabled
         if (clickEnabled && clickBuffer) {
           clickSourceNode = audioContext.createBufferSource();
@@ -240,23 +246,13 @@
           logMessage(`   ⚠️ Moderate (5-15 BPM): ${moderateCount} windows`);
           logMessage(`   ❌ Unstable (>15 BPM): ${unstableCount} windows`);
 
-          logMessage(`🎵 Performing beat tracking (reusing onset envelope)...`);
-          const beatResult = tracker.beatTrack({
-            y,
-            sr,
-            onsetEnvelope: onsetEnvelope,
-            hopLength: 512,
-            startBpm: globalTempo,
-            tightness: 100,
-            trim: true,
-            units: 'time',
-            sparse: true
-          });
-          beatTimes = beatResult.beats;
-          logMessage(`🥁 Beat tracking completed: ${beatTimes.length} beats detected`);
+          logMessage(`🎵 Performing dynamic beat tracking...`);
+          const dynamicResult = dynamicBeatTrack(y, sr, windowSize, hopSize);
+          beatTimes = dynamicResult.beats;
+          logMessage(`🥁 Beat tracking completed: ${beatTimes.length} beats detected (dynamic tempo)`);
 
           logMessage(`🎵 Generating click track for verification...`);
-          clickBuffer = ui.generateClickTrack(beatTimes, audioBuffer.duration);
+          updateClickBuffer();
           logMessage(`✅ Click track generated successfully`);
           clickBtn.disabled = false; // Enable click track button
 
@@ -329,7 +325,7 @@
           beatTimes = result.beats;
           globalTempo = parseFloat(result.bpm.toFixed(1));
           bpmDisplay.textContent = `BPM: ${globalTempo} (QUICK)`;
-          clickBuffer = ui.generateClickTrack(beatTimes, audioBuffer.duration);
+          updateClickBuffer();
           clickBtn.disabled = false;
           logMessage(`✅ Quick BPM: ${globalTempo} BPM`);
           logMessage(`Detected ${beatTimes.length} beats`);
@@ -423,26 +419,7 @@
       logMessage(`🎵 Click track ${clickEnabled ? 'enabled' : 'disabled'}`);
     };
 
-    // Beat offset slider handler (disabled)
-    // beatOffsetSlider.oninput = (e) => {
-    //   beatOffset = parseFloat(e.target.value) / 1000; // Convert ms to seconds
-    //   offsetDisplay.textContent = `${e.target.value}ms`;
 
-    //   if (sourceNode && clickEnabled) {
-    //     restartPlaybackWithClick(); // Apply new offset immediately
-    //   }
-    // };
-
-    // Reset offset button (disabled)
-    // resetOffsetBtn.onclick = () => {
-    //   beatOffsetSlider.value = 0;
-    //   beatOffset = 0;
-    //   offsetDisplay.textContent = "0ms";
-
-    //   if (sourceNode && clickEnabled) {
-    //     restartPlaybackWithClick();
-    //   }
-    // };
 
     // Restart playback with or without click track
     function restartPlaybackWithClick() {
@@ -462,6 +439,9 @@
         sourceNode.loop = true;
         sourceNode.connect(audioContext.destination);
         
+        // Refresh click track to match latest beats
+        updateClickBuffer();
+
         // Start click track if enabled
         clickSourceNode = null;
         if (clickEnabled && clickBuffer) {
@@ -1329,7 +1309,6 @@
     .section-toggle:hover {
       background: #e9ecef;
     }
-    /* Beat timing controls removed */
   </style>
 </head>
 <body>

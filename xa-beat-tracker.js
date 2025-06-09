@@ -803,6 +803,45 @@ export function quickBeatTrack(audioData, sampleRate = 44100) {
     return { bpm: 120, beats: [], confidence: 0 }
   }
 }
+
+/**
+ * Beat tracker that adapts to tempo changes using dynamic tempo estimation.
+ * @param {Float32Array} audioData - Audio signal
+ * @param {number} sampleRate - Sample rate
+ * @param {number} windowSize - Window size in seconds for tempo estimation
+ * @param {number} hopSize - Hop size in seconds for tempo estimation
+ * @returns {Object} { tempo: Array, beats: Array }
+ */
+export function dynamicBeatTrack(
+    audioData,
+    sampleRate = 44100,
+    windowSize = 8.0,
+    hopSize = 1.0,
+) {
+  const tracker = new BeatTracker()
+
+  try {
+    const { tempo } = tracker.estimateDynamicTempo(
+        audioData,
+        sampleRate,
+        windowSize,
+        hopSize,
+    )
+
+    const result = tracker.beatTrack({
+      y: audioData,
+      sr: sampleRate,
+      bpm: tempo,
+      units: 'time',
+      sparse: true,
+    })
+
+    return { tempo, beats: result.beats }
+  } catch (error) {
+    console.error('Dynamic beat tracking failed:', error)
+    return { tempo: [], beats: [] }
+  }
+}
 /**
  * Web Audio API integration helpers
  */
@@ -819,7 +858,7 @@ export class BeatTrackingUI {
    * @param {number} clickFreq - Click frequency in Hz
    * @returns {AudioBuffer} Click track buffer
    */
-  generateClickTrack(beats, duration, clickFreq = 880, offset = 0) {
+  generateClickTrack(beats, duration, clickFreq = 880) {
     if (!this.audioContext) return null
 
     const sampleRate = this.audioContext.sampleRate
@@ -828,8 +867,7 @@ export class BeatTrackingUI {
     const channelData = clickBuffer.getChannelData(0)
 
     beats.forEach((beatTime, beatIndex) => {
-      const adjustedBeatTime = beatTime + offset; // Apply manual offset
-      const startSample = Math.floor(adjustedBeatTime * sampleRate)
+      const startSample = Math.floor(beatTime * sampleRate)
       const clickDuration = 0.1 // 100ms click
       const clickSamples = Math.floor(clickDuration * sampleRate)
 
