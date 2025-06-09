@@ -202,10 +202,8 @@
   <div class="container">
     <h1>🎵 BPM Detector</h1>
     <div id="bpm">BPM: --</div>
-    <div id="resultBanner">
-      <span id="bpmValue"></span>
-      <small id="confValue"></small>
-    </div>
+    <progress id="analysisProgress" value="0" max="100" hidden aria-valuenow="0"></progress>
+
     <input type="file" id="fileInput" accept="audio/*" />
     <div id="progressContainer">
       <progress id="progressBar" value="0" max="100"></progress>
