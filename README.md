@@ -11,7 +11,7 @@ npm install
 npm run dev
 ```
 
-Vite will launch a local server (usually at http://localhost:5173/) where you can interact with the application.
+Vite will launch a local server at http://localhost:3000/ where you can interact with the application.
 
 ## Browser requirements
 
