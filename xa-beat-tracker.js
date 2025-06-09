@@ -197,6 +197,10 @@ export class BeatTracker {
 
     // Apply prior and find peak bin for each frame
     for (let i = 0; i < ftgram.length; i++) {
+]      let peakValue = -Infinity
+      for (let k = 0; k < ftmag[i].length; k++) {
+        if (ftmag[i][k] > peakValue) peakValue = ftmag[i][k]
+      }
       let maxIdx = -1
       let maxMag = -Infinity
 
@@ -212,12 +216,20 @@ export class BeatTracker {
           continue
         }
 
-        // Apply prior if provided
-        const weight = prior ? prior(freq) : 1
-        ftgram[i][j].real *= weight
-        ftgram[i][j].imag *= weight
-
+    // Normalize to keep phase information
+    for (let i = 0; i < ftgram.length; i++) {
+      let maxMag = -Infinity
+      for (let j = 0; j < ftgram[i].length; j++) {
         const mag = Math.sqrt(
+            ftgram[i][j].real * ftgram[i][j].real +
+            ftgram[i][j].imag * ftgram[i][j].imag,
+        )
+        if (mag > maxMag) maxMag = mag
+      }
+      for (let j = 0; j < ftgram[i].length; j++) {
+        // Calculate magnitude but don't need to store it
+        Math.sqrt(
+
             ftgram[i][j].real * ftgram[i][j].real +
             ftgram[i][j].imag * ftgram[i][j].imag,
         )
@@ -508,7 +520,11 @@ export class BeatTracker {
     const cumScore = new Float32Array(N)
 
     // Initialize
-    const scoreThresh = 0.01 * Math.max(...localScore)
+    let maxScore = -Infinity
+    for (let i = 0; i < localScore.length; i++) {
+      if (localScore[i] > maxScore) maxScore = localScore[i]
+    }
+    const scoreThresh = 0.01 * maxScore
     backlink[0] = -1
     cumScore[0] = localScore[0]
 
@@ -654,7 +670,10 @@ export class BeatTracker {
 
   _findPeaksWithProminence(signal, minProminence = 0.1) {
     const peaks = []
-    const maxVal = Math.max(...signal)
+    let maxVal = -Infinity
+    for (let i = 0; i < signal.length; i++) {
+      if (signal[i] > maxVal) maxVal = signal[i]
+    }
 
     for (let i = 1; i < signal.length - 1; i++) {
       if (signal[i] > signal[i - 1] && signal[i] > signal[i + 1]) {
@@ -762,11 +781,16 @@ export class BeatTracker {
   }
 
   _normalize(x) {
-    const max = Math.max(...x)
-    const min = Math.min(...x)
+    let max = -Infinity
+    let min = Infinity
+    for (let i = 0; i < x.length; i++) {
+      const v = x[i]
+      if (v > max) max = v
+      if (v < min) min = v
+    }
     const range = max - min
 
-    if (range === 0) return x
+    if (range === 0) return x.map(() => 0)
 
     return x.map((v) => (v - min) / range)
   }
