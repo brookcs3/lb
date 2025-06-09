@@ -40,6 +40,13 @@
     const tracker = new BeatTracker();
     const ui = new BeatTrackingUI();
 
+    // Regenerate the click track whenever beat times are updated
+    function updateClickBuffer() {
+      if (audioBuffer && beatTimes && beatTimes.length > 0) {
+        clickBuffer = ui.generateClickTrack(beatTimes, audioBuffer.duration);
+      }
+    }
+
     // Utility: Log messages with timestamp
     function logMessage(message) {
       const timestamp = new Date().toLocaleTimeString();
@@ -106,6 +113,9 @@
         // Set up live audio analysis
         setupLiveAnalysis();
         
+        // Ensure click track is current
+        updateClickBuffer();
+
         // Start click track if enabled
         if (clickEnabled && clickBuffer) {
           clickSourceNode = audioContext.createBufferSource();
@@ -247,7 +257,7 @@
           logMessage(`🥁 Beat tracking completed: ${beatTimes.length} beats detected`);
 
           logMessage(`🎵 Generating click track for verification...`);
-          clickBuffer = ui.generateClickTrack(beatTimes, audioBuffer.duration);
+          updateClickBuffer();
           logMessage(`✅ Click track generated successfully`);
           clickBtn.disabled = false; // Enable click track button
 
@@ -315,7 +325,7 @@
           beatTimes = result.beats;
           globalTempo = parseFloat(result.bpm.toFixed(1));
           bpmDisplay.textContent = `BPM: ${globalTempo} (QUICK)`;
-          clickBuffer = ui.generateClickTrack(beatTimes, audioBuffer.duration);
+          updateClickBuffer();
           clickBtn.disabled = false;
           logMessage(`✅ Quick BPM: ${globalTempo} BPM`);
           logMessage(`Detected ${beatTimes.length} beats`);
@@ -386,6 +396,9 @@
         sourceNode.loop = true;
         sourceNode.connect(audioContext.destination);
         
+        // Refresh click track to match latest beats
+        updateClickBuffer();
+
         // Start click track if enabled
         clickSourceNode = null;
         if (clickEnabled && clickBuffer) {
