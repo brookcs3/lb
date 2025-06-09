@@ -238,11 +238,10 @@ export class BeatTracker {
 
     // Compute Fourier tempogram
     const ftgram = this.fourierTempogram(onset, sr, hopLength, winLength)
-    // Magnitudes of each STFT bin
+
+    // Pre-compute magnitudes for each bin
     const ftmag = ftgram.map((frame) =>
-      frame.map((bin) =>
-        Math.sqrt(bin.real * bin.real + bin.imag * bin.imag)
-      ),
+      frame.map((bin) => Math.sqrt(bin.real * bin.real + bin.imag * bin.imag)),
     )
 
     // Get tempo frequencies
@@ -250,6 +249,11 @@ export class BeatTracker {
         sr,
         hopLength,
         winLength,
+    )
+
+    // Pre-compute magnitude of each tempogram bin
+    const ftmag = ftgram.map((frame) =>
+        frame.map((c) => Math.sqrt(c.real * c.real + c.imag * c.imag)),
     )
 
     // Apply tempo constraints
@@ -274,11 +278,11 @@ export class BeatTracker {
 
       for (let j = 0; j < ftgram[i].length; j++) {
         const mag = ftmag[i][j]
-        const weight = prior ? prior(tempoFrequencies[j]) : 1
-        const weighted = mag * weight
+        const priorWeight = prior ? prior(tempoFrequencies[j]) : 1
+        const weightedMag = mag * priorWeight
 
-        if (weighted > maxWeight) {
-          maxWeight = weighted
+        if (weightedMag > maxWeight) {
+          maxWeight = weightedMag
           maxIdx = j
           maxMag = mag
         }
