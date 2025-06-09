@@ -1,7 +1,11 @@
 # BPM Detector
 
 This project tracks beats from audio files. It uses the Web Audio API to analyze audio and detect tempo in real time. Development is handled with [Vite](https://vitejs.dev/).
+
 The user interface logic resides in `main.js`, which is loaded by `index.html`.
+
+This project uses **Node.js 20**. Ensure that version is installed for a
+consistent development and CI environment.
 
 ## Running the development server
 
