@@ -841,7 +841,7 @@ export function quickBeatTrack(audioData, sampleRate = 44100) {
     }
   } catch (error) {
     console.error('Beat tracking failed:', error)
-    return { bpm: 120, beats: [], confidence: 0 }
+    return { bpm: 0, beats: [], confidence: 0 }
   }
 }
 
