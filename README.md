@@ -11,7 +11,7 @@ npm install
 npm run dev
 ```
 
-Vite will launch a local server (usually at http://localhost:5173/) where you can interact with the application.
+Vite will launch a local server at http://localhost:3000/ where you can interact with the application.
 
 ## Browser requirements
 
@@ -36,3 +36,17 @@ mkdir -p logs
 ```
 
 Log files placed here will be ignored by Git.
+
+## Running tests
+
+Unit tests use [Jest](https://jestjs.io/). Install dependencies and run:
+
+```sh
+npm install
+npm test
+```
+
+
+## License
+
+This project is licensed under the ISC License. See [LICENSE](LICENSE) for details.

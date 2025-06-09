@@ -195,34 +195,26 @@ export class BeatTracker {
       }
     }
 
-    // Find peak values and normalize
-    const ftmag = ftgram.map((frame) =>
-        frame.map((bin) =>
-            Math.log1p(1e6 * Math.sqrt(bin.real * bin.real + bin.imag * bin.imag)),
-        ),
-    )
-
-    // Apply prior if provided
-    if (prior) {
-      for (let i = 0; i < ftmag.length; i++) {
-        for (let j = 0; j < ftmag[i].length; j++) {
-          ftmag[i][j] += prior(tempoFrequencies[j])
-        }
-      }
-    }
-
-    // Keep only values at peak
+    // Apply prior and find peak bin for each frame
     for (let i = 0; i < ftgram.length; i++) {
-      let peakValue = -Infinity
+]      let peakValue = -Infinity
       for (let k = 0; k < ftmag[i].length; k++) {
         if (ftmag[i][k] > peakValue) peakValue = ftmag[i][k]
       }
+      let maxIdx = -1
+      let maxMag = -Infinity
+
       for (let j = 0; j < ftgram[i].length; j++) {
-        if (ftmag[i][j] < peakValue) {
+        const freq = tempoFrequencies[j]
+
+        // Skip bins outside allowed tempo range
+        if (
+            (tempoMin !== null && freq < tempoMin) ||
+            (tempoMax !== null && freq > tempoMax)
+        ) {
           ftgram[i][j] = { real: 0, imag: 0 }
+          continue
         }
-      }
-    }
 
     // Normalize to keep phase information
     for (let i = 0; i < ftgram.length; i++) {
@@ -237,14 +229,28 @@ export class BeatTracker {
       for (let j = 0; j < ftgram[i].length; j++) {
         // Calculate magnitude but don't need to store it
         Math.sqrt(
+
             ftgram[i][j].real * ftgram[i][j].real +
             ftgram[i][j].imag * ftgram[i][j].imag,
         )
-        const normFactor = Math.sqrt(1e-10 + maxMag)
-        if (normFactor > 0) {
-          ftgram[i][j].real /= normFactor
-          ftgram[i][j].imag /= normFactor
+
+        if (mag > maxMag) {
+          maxMag = mag
+          maxIdx = j
         }
+      }
+
+      // Zero out all bins except the maximum
+      for (let j = 0; j < ftgram[i].length; j++) {
+        if (j !== maxIdx) {
+          ftgram[i][j] = { real: 0, imag: 0 }
+        }
+      }
+
+      // Normalize the remaining bin to unit magnitude
+      if (maxIdx >= 0 && maxMag > 0) {
+        ftgram[i][maxIdx].real /= maxMag
+        ftgram[i][maxIdx].imag /= maxMag
       }
     }
 
