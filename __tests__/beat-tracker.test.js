@@ -55,3 +55,10 @@ test('quickBeatTrack uses detected tempo instead of fallback', () => {
   expect(result.beats.length).toBe(8);
   expect(result.confidence).toBeGreaterThan(0);
 });
+
+test('quickBeatTrack returns 0 BPM when beatTrack fails', () => {
+  const result = quickBeatTrack(null, 44100);
+  expect(result.bpm).toBe(0);
+  expect(result.beats).toEqual([]);
+  expect(result.confidence).toBe(0);
+});
