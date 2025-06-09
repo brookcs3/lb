@@ -1,19 +1,24 @@
-import { quickBeatTrack } from './xa-beat-tracker.js';
+importScripts('xa-beat-tracker.js');
 
 self.onmessage = async (e) => {
-  const { arrayBuffer } = e.data || {};
-  if (!arrayBuffer) {
-    self.postMessage({ error: 'No ArrayBuffer provided' });
-    return;
-  }
+  const { command, audioData, sampleRate } = e.data;
+  if (command === 'analyze') {
+    try {
+      self.postMessage({ type: 'progress', value: 0 });
+      const tracker = new BeatTracker();
+      const onset = tracker.onsetStrength(audioData, sampleRate);
+      self.postMessage({ type: 'progress', value: 50 });
+      const result = tracker.beatTrack({
+        onsetEnvelope: onset,
+        sr: sampleRate,
+        units: 'time',
+        sparse: true
+      });
+      self.postMessage({ type: 'progress', value: 100 });
+      self.postMessage({ type: 'result', bpm: result.tempo, beats: result.beats });
+    } catch (err) {
+      self.postMessage({ type: 'error', message: err.message });
+    }
 
-  try {
-    const ctx = new OfflineAudioContext(1, 1, 44100);
-    const buffer = await ctx.decodeAudioData(arrayBuffer);
-    const channelData = buffer.getChannelData(0);
-    const { bpm, beats } = quickBeatTrack(channelData, buffer.sampleRate);
-    self.postMessage({ bpm, beats });
-  } catch (err) {
-    self.postMessage({ error: err.message });
   }
 };
