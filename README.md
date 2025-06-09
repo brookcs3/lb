@@ -17,6 +17,16 @@ Vite will launch a local server (usually at http://localhost:5173/) where you ca
 
 A modern browser with Web Audio API support (e.g. current versions of Chrome, Edge, or Firefox) is required for beat tracking.
 
+## Helper buttons
+
+The UI exposes several shortcut buttons. After loading an audio file you can:
+
+- **Quick Analyze** – run a lightweight beat tracker.
+- **beat_track()** – call the exported `beat_track` helper.
+- **tempo()** – call the exported `tempo` helper to estimate the global BPM.
+
+These shortcuts make it easy to test the library without writing code.
+
 ## Debugging
 
 Any debugging logs should be stored in the `logs/` directory, which is listed in `.gitignore` so it isn't committed. Create the directory if it doesn't exist:

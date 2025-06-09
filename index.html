@@ -5,7 +5,7 @@
   <title>🎵 BPM Detector</title>
   <!-- Chart.js removed: the application draws the waveform manually -->
   <script type="module" defer>
-    import { BeatTracker, quickBeatTrack, BeatTrackingUI, dynamicBeatTrack } from './xa-beat-tracker.js';
+    import { BeatTracker, quickBeatTrack, BeatTrackingUI, dynamicBeatTrack, beat_track, tempo } from './xa-beat-tracker.js';
 
     // DOM elements
     const fileInput = document.getElementById("fileInput");
@@ -13,6 +13,8 @@
     const stopBtn = document.getElementById("stopBtn");
     const analyzeBtn = document.getElementById("analyzeBtn");
     const quickAnalyzeBtn = document.getElementById("quickAnalyzeBtn");
+    const beatTrackBtn = document.getElementById("beatTrackBtn");
+    const tempoBtn = document.getElementById("tempoBtn");
     const clickBtn = document.getElementById("clickBtn");
     const bpmDisplay = document.getElementById("bpm");
     const logOutput = document.getElementById("logOutput");
@@ -62,6 +64,8 @@
       logMessage('❌ Unexpected error: ' + (event.reason && event.reason.message ? event.reason.message : event.reason));
       analyzeBtn.disabled = false;
       quickAnalyzeBtn.disabled = false;
+      beatTrackBtn.disabled = false;
+      tempoBtn.disabled = false;
       playBtn.disabled = false;
     });
 
@@ -82,6 +86,8 @@
         playBtn.disabled = false;
         analyzeBtn.disabled = false;
         quickAnalyzeBtn.disabled = false;
+        beatTrackBtn.disabled = false;
+        tempoBtn.disabled = false;
         collapseAllBtn.disabled = false;
         expandAllBtn.disabled = false;
       } catch (error) {
@@ -167,6 +173,9 @@
 
       try {
         analyzeBtn.disabled = true;
+        quickAnalyzeBtn.disabled = true;
+        beatTrackBtn.disabled = true;
+        tempoBtn.disabled = true;
         playBtn.disabled = true;
         const y = audioBuffer.getChannelData(0);
         const sr = audioBuffer.sampleRate;
@@ -290,6 +299,9 @@
 
       } finally {
         analyzeBtn.disabled = false;
+        quickAnalyzeBtn.disabled = false;
+        beatTrackBtn.disabled = false;
+        tempoBtn.disabled = false;
         playBtn.disabled = false;
       }
     };
@@ -300,6 +312,8 @@
       try {
         quickAnalyzeBtn.disabled = true;
         analyzeBtn.disabled = true;
+        beatTrackBtn.disabled = true;
+        tempoBtn.disabled = true;
         playBtn.disabled = true;
         bpmDisplay.textContent = "BPM: Quick...";
         clearLog();
@@ -325,6 +339,68 @@
         logMessage("❌ Quick analysis failed: " + error.message);
       } finally {
         quickAnalyzeBtn.disabled = false;
+        analyzeBtn.disabled = false;
+        beatTrackBtn.disabled = false;
+        tempoBtn.disabled = false;
+        playBtn.disabled = false;
+      }
+    };
+
+    // beat_track helper button
+    beatTrackBtn.onclick = () => {
+      if (!audioBuffer) return;
+      try {
+        beatTrackBtn.disabled = true;
+        analyzeBtn.disabled = true;
+        playBtn.disabled = true;
+        bpmDisplay.textContent = "BPM: beat_track...";
+        clearLog();
+        logMessage("🔧 beat_track() helper");
+        const y = audioBuffer.getChannelData(0);
+        const sr = audioBuffer.sampleRate;
+        const result = beat_track(y, sr, { units: 'time', sparse: true });
+        beatTimes = result.beats;
+        globalTempo = parseFloat(result.tempo.toFixed(1));
+        bpmDisplay.textContent = `BPM: ${globalTempo} (beat_track)`;
+        clickBuffer = ui.generateClickTrack(beatTimes, audioBuffer.duration);
+        clickBtn.disabled = false;
+        logMessage(`✅ beat_track tempo: ${globalTempo} BPM`);
+        logMessage(`Detected ${beatTimes.length} beats`);
+      } catch (error) {
+        console.error('beat_track error:', error);
+        bpmDisplay.textContent = 'BPM: Error';
+        logMessage('❌ beat_track failed: ' + error.message);
+      } finally {
+        beatTrackBtn.disabled = false;
+        analyzeBtn.disabled = false;
+        playBtn.disabled = false;
+      }
+    };
+
+    // tempo helper button
+    tempoBtn.onclick = () => {
+      if (!audioBuffer) return;
+      try {
+        tempoBtn.disabled = true;
+        analyzeBtn.disabled = true;
+        playBtn.disabled = true;
+        bpmDisplay.textContent = "BPM: tempo...";
+        clearLog();
+        logMessage("🔧 tempo() helper");
+        const y = audioBuffer.getChannelData(0);
+        const sr = audioBuffer.sampleRate;
+        const onset = tracker.onsetStrength(y, sr);
+        const bpm = tempo(onset, sr);
+        globalTempo = parseFloat(bpm.toFixed(1));
+        beatTimes = [];
+        bpmDisplay.textContent = `BPM: ${globalTempo} (tempo)`;
+        logMessage(`✅ tempo: ${globalTempo} BPM`);
+      } catch (error) {
+        console.error('tempo error:', error);
+        bpmDisplay.textContent = 'BPM: Error';
+        logMessage('❌ tempo() failed: ' + error.message);
+      } finally {
+        tempoBtn.disabled = false;
         analyzeBtn.disabled = false;
         playBtn.disabled = false;
       }
@@ -1070,6 +1146,9 @@
     playBtn.disabled = true;
     stopBtn.disabled = true;
     analyzeBtn.disabled = true;
+    quickAnalyzeBtn.disabled = true;
+    beatTrackBtn.disabled = true;
+    tempoBtn.disabled = true;
     clickBtn.disabled = true;
     collapseAllBtn.disabled = true;
     expandAllBtn.disabled = true;
@@ -1140,6 +1219,18 @@
     }
     #quickAnalyzeBtn:hover:not(:disabled) {
       background: #138496;
+    }
+    #beatTrackBtn {
+      background: #ffc107;
+    }
+    #beatTrackBtn:hover:not(:disabled) {
+      background: #e0a800;
+    }
+    #tempoBtn {
+      background: #6f42c1;
+    }
+    #tempoBtn:hover:not(:disabled) {
+      background: #5936a8;
     }
     #stopBtn {
       background: #dc3545;
@@ -1230,6 +1321,8 @@
       <button id="stopBtn">⏹️ Stop</button>
       <button id="analyzeBtn">🔍 Analyze BPM</button>
       <button id="quickAnalyzeBtn" disabled>⚡ Quick Analyze</button>
+      <button id="beatTrackBtn" disabled>beat_track()</button>
+      <button id="tempoBtn" disabled>tempo()</button>
       <button id="clickBtn">🔇 Click Track</button>
       <button id="collapseAllBtn">⏬ Collapse All</button>
       <button id="expandAllBtn">⏫ Expand All</button>
