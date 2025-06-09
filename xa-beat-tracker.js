@@ -96,6 +96,8 @@ export class BeatTracker {
    * @param {number|Float32Array} options.bpm - Optional tempo override
    * @param {string} options.units - Output units ('frames', 'samples', 'time')
    * @param {boolean} options.sparse - Return sparse or dense array (default: true)
+   * @param {number} options.minBpm - Minimum tempo to consider (default: 30)
+   * @param {number} options.maxBpm - Maximum tempo to consider (default: 300)
    * @returns {Object} {tempo: number|Float32Array, beats: Array|Float32Array}
    */
   beatTrack(options = {}) {
@@ -110,6 +112,8 @@ export class BeatTracker {
       bpm = null,
       units = 'time',
       sparse = true,
+      minBpm = 30,
+      maxBpm = 300,
     } = options
 
     // Get onset envelope if not provided
@@ -137,7 +141,14 @@ export class BeatTracker {
     // Estimate BPM if not provided
     let tempo = bpm
     if (tempo === null) {
-      tempo = this.tempoEstimation(onset, sr, hopLength, startBpm)
+      tempo = this.tempoEstimation(
+          onset,
+          sr,
+          hopLength,
+          startBpm,
+          minBpm,
+          maxBpm,
+      )
     }
 
     // Ensure tempo is array-like for vectorization
@@ -360,11 +371,18 @@ export class BeatTracker {
    * @param {number} sr - Sample rate
    * @param {number} hopLength - Hop length
    * @param {number} startBpm - Initial guess
+   * @param {number} minBpm - Minimum tempo to consider (default: 30)
+   * @param {number} maxBpm - Maximum tempo to consider (default: 300)
    * @returns {number} Estimated tempo in BPM
    */
-  tempoEstimation(onsetEnvelope, sr = 22050, hopLength = 512, startBpm = 120) {
-    const minBpm = 30
-    const maxBpm = 300
+  tempoEstimation(
+      onsetEnvelope,
+      sr = 22050,
+      hopLength = 512,
+      startBpm = 120,
+      minBpm = 30,
+      maxBpm = 300,
+  ) {
 
     // Convert BPM range to lag range
     const minLag = Math.floor((60 * sr) / (maxBpm * hopLength))
@@ -826,9 +844,16 @@ export class BeatTracker {
  * Simplified beat tracker for quick analysis
  * @param {Float32Array} audioData - Audio signal
  * @param {number} sampleRate - Sample rate
+ * @param {number} minBpm - Minimum tempo to search (default: 70)
+ * @param {number} maxBpm - Maximum tempo to search (default: 180)
  * @returns {Object} {bpm: number, beats: Array}
- */
-export function quickBeatTrack(audioData, sampleRate = 44100) {
+*/
+export function quickBeatTrack(
+    audioData,
+    sampleRate = 44100,
+    minBpm = 70,
+    maxBpm = 180,
+) {
   const tracker = new BeatTracker()
 
   try {
@@ -837,6 +862,8 @@ export function quickBeatTrack(audioData, sampleRate = 44100) {
       sr: sampleRate,
       units: 'time',
       sparse: true,
+      minBpm,
+      maxBpm,
     })
 
     return {
@@ -973,12 +1000,19 @@ export class BeatTrackingUI {
 
 export function beat_track(y, sr = 22050, opts = {}) {
   const tracker = new BeatTracker()
-  return tracker.beatTrack({ y, sr, ...opts })
+  const { minBpm = 70, maxBpm = 180, ...rest } = opts
+  return tracker.beatTrack({ y, sr, minBpm, maxBpm, ...rest })
 }
 
 /**
  * Alias matching librosa.beat.tempo().
  * Computes a single global tempo estimate from an onset envelope.
+ * @param {Float32Array} onsetEnvelope - Onset strength signal
+ * @param {number} sr - Sample rate
+ * @param {number} hopLength - Hop length
+ * @param {number} startBpm - Initial guess
+ * @param {number} minBpm - Minimum tempo to search (default: 70)
+ * @param {number} maxBpm - Maximum tempo to search (default: 180)
  */
 
 export function tempo(
@@ -986,7 +1020,16 @@ export function tempo(
     sr = 22050,
     hopLength = 512,
     startBpm = 120,
+    minBpm = 70,
+    maxBpm = 180,
 ) {
   const tracker = new BeatTracker()
-  return tracker.tempoEstimation(onsetEnvelope, sr, hopLength, startBpm)
+  return tracker.tempoEstimation(
+      onsetEnvelope,
+      sr,
+      hopLength,
+      startBpm,
+      minBpm,
+      maxBpm,
+  )
 }

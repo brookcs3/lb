@@ -41,6 +41,15 @@ The UI exposes several shortcut buttons. After loading an audio file you can:
 
 These shortcuts make it easy to test the library without writing code.
 
+### Custom BPM range
+
+The helper functions `quickBeatTrack`, `beat_track`, and `tempo` accept optional
+`minBpm` and `maxBpm` parameters to restrict the search range. By default they
+analyze between 70–180 BPM so the fast methods align with the advanced analyzer.
+You can pass different values if your material lies outside this range.  The
+same parameters are also available on `BeatTracker.beatTrack()` and
+`BeatTracker.tempoEstimation()` for lower-level control.
+
 ## Debugging
 
 Any debugging logs should be stored in the `logs/` directory, which is listed in `.gitignore` so it isn't committed. Create the directory if it doesn't exist:
