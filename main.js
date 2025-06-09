@@ -465,7 +465,6 @@
       if (!sourceNode || !audioContext) return;
       
       const currentTime = audioContext.currentTime - startTime;
-      const wasPlaying = true;
       
       // Stop current playback
       if (sourceNode) sourceNode.stop();
