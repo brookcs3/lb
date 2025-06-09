@@ -37,6 +37,21 @@
       color: white;
       border-radius: 10px;
     }
+    #resultBanner {
+      display: none;
+      font-size: 2rem;
+      font-weight: bold;
+      text-align: center;
+      margin: 1rem 0;
+      padding: 1rem;
+      background: linear-gradient(135deg, #667eea, #764ba2);
+      color: white;
+      border-radius: 10px;
+    }
+    #resultBanner small {
+      font-size: 0.7em;
+      margin-left: 0.5rem;
+    }
     .controls {
       display: flex;
       gap: 1rem;
@@ -187,6 +202,10 @@
   <div class="container">
     <h1>🎵 BPM Detector</h1>
     <div id="bpm">BPM: --</div>
+    <div id="resultBanner">
+      <span id="bpmValue"></span>
+      <small id="confValue"></small>
+    </div>
     <input type="file" id="fileInput" accept="audio/*" />
     <div id="progressContainer">
       <progress id="progressBar" value="0" max="100"></progress>
