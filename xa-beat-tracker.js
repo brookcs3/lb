@@ -858,7 +858,7 @@ export class BeatTrackingUI {
    * @param {number} clickFreq - Click frequency in Hz
    * @returns {AudioBuffer} Click track buffer
    */
-  generateClickTrack(beats, duration, clickFreq = 880, offset = 0) {
+  generateClickTrack(beats, duration, clickFreq = 880) {
     if (!this.audioContext) return null
 
     const sampleRate = this.audioContext.sampleRate
@@ -867,8 +867,7 @@ export class BeatTrackingUI {
     const channelData = clickBuffer.getChannelData(0)
 
     beats.forEach((beatTime, beatIndex) => {
-      const adjustedBeatTime = beatTime + offset; // Apply manual offset
-      const startSample = Math.floor(adjustedBeatTime * sampleRate)
+      const startSample = Math.floor(beatTime * sampleRate)
       const clickDuration = 0.1 // 100ms click
       const clickSamples = Math.floor(clickDuration * sampleRate)
 
