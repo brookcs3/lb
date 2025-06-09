@@ -36,3 +36,7 @@ mkdir -p logs
 ```
 
 Log files placed here will be ignored by Git.
+
+## License
+
+This project is licensed under the ISC License. See [LICENSE](LICENSE) for details.
