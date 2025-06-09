@@ -19,6 +19,20 @@
     const logToggle = document.getElementById("logToggle");
     const waveformToggle = document.getElementById("waveformToggle");
 
+    const showPlp = () => {
+      plpBtn.removeAttribute('hidden');
+    };
+
+    if (new URLSearchParams(window.location.search).get('advanced')) {
+      showPlp();
+    }
+
+    document.addEventListener('keydown', (e) => {
+      if (e.key === 'Alt') {
+        showPlp();
+      }
+    });
+
     // State variables
     let audioContext, sourceNode, audioBuffer, beatTimes, startTime;
     let animationFrame, bpmInterval;
