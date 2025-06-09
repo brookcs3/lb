@@ -1,3 +1,66 @@
+
+// Lightweight FFT implementation integrated directly for browser use
+function fft(signal) {
+  const complexSignal = signal.map((v) => ({ real: v, imag: 0 }))
+  return _fftComplex(complexSignal)
+}
+
+function ifft(spectrum) {
+  const N = spectrum.length
+  const conjugated = spectrum.map((c) => ({ real: c.real, imag: -c.imag }))
+  const transformed = _fftComplex(conjugated)
+  return Float32Array.from(transformed.map((c) => c.real / N))
+}
+
+function _fftComplex(x) {
+  const N = x.length
+  if (N <= 1) return x.map((c) => ({ real: c.real, imag: c.imag }))
+  if (N % 2 !== 0) return _dftComplex(x)
+  const even = []
+  const odd = []
+  for (let i = 0; i < N; i += 2) {
+    even.push(x[i])
+    odd.push(x[i + 1])
+  }
+  const fftEven = _fftComplex(even)
+  const fftOdd = _fftComplex(odd)
+  const result = new Array(N)
+  for (let k = 0; k < N / 2; k++) {
+    const angle = (-2 * Math.PI * k) / N
+    const cos = Math.cos(angle)
+    const sin = Math.sin(angle)
+    const oddReal = fftOdd[k].real * cos - fftOdd[k].imag * sin
+    const oddImag = fftOdd[k].real * sin + fftOdd[k].imag * cos
+    result[k] = {
+      real: fftEven[k].real + oddReal,
+      imag: fftEven[k].imag + oddImag,
+    }
+    result[k + N / 2] = {
+      real: fftEven[k].real - oddReal,
+      imag: fftEven[k].imag - oddImag,
+    }
+  }
+  return result
+}
+
+function _dftComplex(x) {
+  const N = x.length
+  const out = new Array(N)
+  for (let k = 0; k < N; k++) {
+    let real = 0
+    let imag = 0
+    for (let n = 0; n < N; n++) {
+      const angle = (-2 * Math.PI * k * n) / N
+      const cos = Math.cos(angle)
+      const sin = Math.sin(angle)
+      real += x[n].real * cos - x[n].imag * sin
+      imag += x[n].real * sin + x[n].imag * cos
+    }
+    out[k] = { real, imag }
+  }
+  return out
+}
+
 /**
  * Advanced Beat Tracking Module for JavaScript
  * Implements dynamic programming beat tracking and predominant local pulse detection
@@ -708,24 +771,8 @@ export class BeatTracker {
   }
 
   _fft(signal) {
-    // Simplified FFT - replace with proper library like FFTJS for production
-    const N = signal.length
-    const result = []
-
-    for (let k = 0; k < N; k++) {
-      let real = 0
-      let imag = 0
-
-      for (let n = 0; n < N; n++) {
-        const angle = (-2 * Math.PI * k * n) / N
-        real += signal[n] * Math.cos(angle)
-        imag += signal[n] * Math.sin(angle)
-      }
-
-      result.push({ real, imag })
-    }
-
-    return result
+    // Delegate to lightweight internal FFT implementation
+    return fft(signal)
   }
 
   _istft(stft, hopLength, nFft, length) {
@@ -751,21 +798,8 @@ export class BeatTracker {
   }
 
   _ifft(spectrum) {
-    const N = spectrum.length
-    const result = new Float32Array(N)
-
-    for (let n = 0; n < N; n++) {
-      let value = 0
-      for (let k = 0; k < N; k++) {
-        const angle = (2 * Math.PI * k * n) / N
-        value +=
-            spectrum[k].real * Math.cos(angle) -
-            spectrum[k].imag * Math.sin(angle)
-      }
-      result[n] = value / N
-    }
-
-    return result
+    // Delegate to lightweight internal FFT implementation
+    return ifft(spectrum)
   }
 
   _fourierTempoFrequencies(sr, hopLength, winLength) {
