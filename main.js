@@ -1142,8 +1142,13 @@
       const height = canvas.height;
       ctx.clearRect(0, 0, width, height);
       const channelData = audioBuffer.getChannelData(0);
-      const minValue = Math.min(...channelData);
-      const maxValue = Math.max(...channelData);
+      let minValue = Infinity;
+      let maxValue = -Infinity;
+      for (let i = 0; i < channelData.length; i++) {
+        const v = channelData[i];
+        if (v < minValue) minValue = v;
+        if (v > maxValue) maxValue = v;
+      }
       const normalizedData = channelData.map(value => (value - minValue) / (maxValue - minValue));
       ctx.beginPath();
       ctx.moveTo(0, height / 2);
