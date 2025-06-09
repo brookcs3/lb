@@ -21,6 +21,10 @@ function log(message) {
   postMessage({ type: 'progress', message });
 }
 
+function reportProgress(progress) {
+  postMessage({ type: 'progress', value: parseInt(progress, 10) });
+}
+
 async function computeOnsetStrength(y, sr) {
   const frameLength = 2048;
   const hopLength = 512;
@@ -50,7 +54,7 @@ async function computeOnsetStrength(y, sr) {
     prevSpectrum = spectrum;
     if (i % 200 === 0) {
       const progress = ((i / frames) * 100).toFixed(0);
-      log(` Computing onsets... ${progress}% (frame ${i}/${frames}, flux: ${onset[i].toFixed(3)})`);
+      reportProgress(progress);
       await new Promise((r) => setTimeout(r, 1));
     }
   }
@@ -80,7 +84,7 @@ async function estimateGlobalTempo(onsetEnvelope, sr) {
     candidates.push({ bpm, score: autocorr[lagIdx], lag });
     if (lagIdx % 20 === 0) {
       const progress = ((lagIdx / autocorr.length) * 100).toFixed(0);
-      log(` Autocorr ${progress}%: lag=${lag} → ${bpm.toFixed(1)} BPM (corr: ${autocorr[lagIdx].toFixed(4)})`);
+      reportProgress(progress);
       await new Promise((r) => setTimeout(r, 1));
     }
   }
@@ -133,7 +137,7 @@ async function computeFourierTempogram(onsetEnvelope, sr) {
     if (i % Math.max(1, Math.floor(frames / 10)) === 0) {
       const progress = ((i / frames) * 100).toFixed(0);
       const frameEnergy = frame.reduce((sum, x) => sum + x * x, 0);
-      log(` Tempogram ${progress}%: frame ${i}/${frames} (energy: ${frameEnergy.toFixed(3)})`);
+      reportProgress(progress);
       await new Promise((r) => setTimeout(r, 1));
     }
   }

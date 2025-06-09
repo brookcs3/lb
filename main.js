@@ -59,9 +59,10 @@ const ui = new BeatTrackingUI();
   const workerTasks = new Map();
 
   analysisWorker.onmessage = (e) => {
-    const { type, id, command, result, message } = e.data;
+    const { type, id, command, result, message, value } = e.data;
     if (type === 'progress') {
-      logMessage(message);
+      if (typeof value !== 'undefined') setProgress(value);
+      if (message) logMessage(message);
     } else if (type === 'result') {
       const task = workerTasks.get(id);
       if (task) {
