@@ -2,6 +2,7 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>🎵 BPM Detector</title>
   <!-- Chart.js removed: the application draws the waveform manually -->
   <script type="module" src="./main.js"></script>
@@ -53,6 +54,10 @@
     button {
       background: #007bff;
       color: white;
+    }
+    button:focus-visible {
+      outline: 3px solid #333;
+      outline-offset: 2px;
     }
     button:disabled {
       background: #ccc;
@@ -187,20 +192,20 @@
       <progress id="progressBar" value="0" max="100"></progress>
     </div>
     <div class="controls">
-      <button id="playBtn">▶️ Play</button>
-      <button id="stopBtn">⏹️ Stop</button>
-      <button id="analyzeBtn">🔍 Analyze BPM</button>
-      <button id="quickAnalyzeBtn" disabled>⚡ Quick Analyze</button>
-      <button id="beatTrackBtn" disabled>beat_track()</button>
-      <button id="tempoBtn" disabled>tempo()</button>
-      <button id="plpBtn" disabled hidden>PLP Analyze</button>
-      <button id="clickBtn">🔇 Click Track</button>
-      <button id="collapseAllBtn">⏬ Collapse All</button>
-      <button id="expandAllBtn">⏫ Expand All</button>
+      <button id="playBtn" aria-label="Play">▶️ Play</button>
+      <button id="stopBtn" aria-label="Stop">⏹️ Stop</button>
+      <button id="analyzeBtn" aria-label="Analyze BPM">🔍 Analyze BPM</button>
+      <button id="quickAnalyzeBtn" aria-label="Quick Analyze" disabled>⚡ Quick Analyze</button>
+      <button id="beatTrackBtn" aria-label="Run beat_track()" disabled>beat_track()</button>
+      <button id="tempoBtn" aria-label="Estimate tempo" disabled>tempo()</button>
+      <button id="plpBtn" aria-label="PLP Analyze" disabled hidden>PLP Analyze</button>
+      <button id="clickBtn" aria-label="Toggle click track">🔇 Click Track</button>
+      <button id="collapseAllBtn" aria-label="Collapse all sections">⏬ Collapse All</button>
+      <button id="expandAllBtn" aria-label="Expand all sections">⏫ Expand All</button>
     </div>
-    <button id="logToggle" class="section-toggle">▼ Collapse Log</button>
+    <button id="logToggle" class="section-toggle" aria-label="Toggle log section">▼ Collapse Log</button>
     <div id="logOutput"></div>
-    <button id="waveformToggle" class="section-toggle">▼ Collapse Waveform</button>
+    <button id="waveformToggle" class="section-toggle" aria-label="Toggle waveform section">▼ Collapse Waveform</button>
     <div id="waveformContainer">
       <canvas id="waveformCanvas"></canvas>
       <div id="playhead"></div>
