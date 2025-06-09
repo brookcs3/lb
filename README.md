@@ -34,6 +34,10 @@ The UI exposes several shortcut buttons. After loading an audio file you can:
 - **Quick Analyze** – run a lightweight beat tracker.
 - **beat_track()** – call the exported `beat_track` helper.
 - **tempo()** – call the exported `tempo` helper to estimate the global BPM.
+- **PLP Analyze** – hidden advanced option. Reveal this button with the `?advanced=1`
+  query string (or by holding **Alt** when the page has focus). It runs
+  `tracker.plp` to estimate tempo and logs the pulse curve length for
+  diagnostics.
 
 These shortcuts make it easy to test the library without writing code.
 
