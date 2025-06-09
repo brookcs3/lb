@@ -11,6 +11,9 @@
     const plpBtn = document.getElementById("plpBtn");
     const clickBtn = document.getElementById("clickBtn");
     const bpmDisplay = document.getElementById("bpm");
+    const resultBanner = document.getElementById("resultBanner");
+    const bpmValue = document.getElementById("bpmValue");
+    const confValue = document.getElementById("confValue");
     const logOutput = document.getElementById("logOutput");
     const waveformCanvas = document.getElementById("waveformCanvas");
     const playhead = document.getElementById("playhead");
@@ -18,6 +21,9 @@
     const expandAllBtn = document.getElementById("expandAllBtn");
     const logToggle = document.getElementById("logToggle");
     const waveformToggle = document.getElementById("waveformToggle");
+
+    // Hide result banner until analysis is complete
+    resultBanner.style.display = 'none';
 
     const showPlp = () => {
       plpBtn.removeAttribute('hidden');
@@ -64,6 +70,12 @@
     // Utility: Clear log output
     function clearLog() {
       logOutput.textContent = "";
+    }
+
+    function showResultBanner(bpm, confidence) {
+      bpmValue.textContent = bpm.toFixed(1);
+      confValue.textContent = `(${(confidence * 100).toFixed(1)}% confidence)`;
+      resultBanner.style.display = 'block';
     }
 
     // Catch unexpected promise rejections to keep the UI responsive
@@ -198,6 +210,7 @@
         const windowSize = isLargeFile ? 8.0 : 4.0;
         const hopSize = isLargeFile ? 2.0 : 1.0;
         bpmDisplay.textContent = "BPM: Analyzing...";
+        resultBanner.style.display = 'none';
         clearLog();
         logMessage("🔍 Starting BPM analysis");
         logMessage(`Audio: ${y.length.toLocaleString()} samples (${(y.length/sr).toFixed(1)}s)`);
@@ -289,6 +302,7 @@
           }
           
           bpmDisplay.textContent = `BPM: ${globalTempo} (${displayStatus})`;
+          showResultBanner(globalTempo, confidence);
 
           logMessage(`🎉 FINAL RESULT:`);
           if (confidence > 0.7 && tempogramConfirmed) {
@@ -333,6 +347,7 @@
         plpBtn.disabled = true;
         playBtn.disabled = true;
         bpmDisplay.textContent = "BPM: Quick...";
+        resultBanner.style.display = 'none';
         clearLog();
         logMessage("⚡ Quick BPM analysis");
         const y = audioBuffer.getChannelData(0);
@@ -342,6 +357,7 @@
           beatTimes = result.beats;
           globalTempo = parseFloat(result.bpm.toFixed(1));
           bpmDisplay.textContent = `BPM: ${globalTempo} (QUICK)`;
+          showResultBanner(globalTempo, 1);
           updateClickBuffer();
           clickBtn.disabled = false;
           logMessage(`✅ Quick BPM: ${globalTempo} BPM`);
@@ -373,6 +389,7 @@
         plpBtn.disabled = true;
         playBtn.disabled = true;
         bpmDisplay.textContent = "BPM: beat_track...";
+        resultBanner.style.display = 'none';
         clearLog();
         logMessage("🔧 beat_track() helper");
         const y = audioBuffer.getChannelData(0);
@@ -381,6 +398,7 @@
         beatTimes = result.beats;
         globalTempo = parseFloat(result.tempo.toFixed(1));
         bpmDisplay.textContent = `BPM: ${globalTempo} (beat_track)`;
+        showResultBanner(globalTempo, 1);
         clickBuffer = ui.generateClickTrack(beatTimes, audioBuffer.duration);
         clickBtn.disabled = false;
         logMessage(`✅ beat_track tempo: ${globalTempo} BPM`);
@@ -406,6 +424,7 @@
         plpBtn.disabled = true;
         playBtn.disabled = true;
         bpmDisplay.textContent = "BPM: tempo...";
+        resultBanner.style.display = 'none';
         clearLog();
         logMessage("🔧 tempo() helper");
         const y = audioBuffer.getChannelData(0);
@@ -415,6 +434,7 @@
         globalTempo = parseFloat(bpm.toFixed(1));
         beatTimes = [];
         bpmDisplay.textContent = `BPM: ${globalTempo} (tempo)`;
+        showResultBanner(globalTempo, 1);
         logMessage(`✅ tempo: ${globalTempo} BPM`);
       } catch (error) {
         console.error('tempo error:', error);
@@ -439,6 +459,7 @@
         tempoBtn.disabled = true;
         playBtn.disabled = true;
         bpmDisplay.textContent = "BPM: PLP...";
+        resultBanner.style.display = 'none';
         clearLog();
         logMessage("🔧 PLP analysis");
         const y = audioBuffer.getChannelData(0);
@@ -447,6 +468,7 @@
         const bpm = tracker.tempoEstimation(pulse, sr);
         globalTempo = parseFloat(bpm.toFixed(1));
         bpmDisplay.textContent = `BPM: ${globalTempo} (PLP)`;
+        showResultBanner(globalTempo, 1);
         logMessage(`✅ PLP BPM: ${globalTempo} BPM`);
         logMessage(`Pulse curve length: ${pulse.length}`);
       } catch (error) {
