@@ -62,3 +62,22 @@ test('quickBeatTrack returns 0 BPM when beatTrack fails', () => {
   expect(result.beats).toEqual([]);
   expect(result.confidence).toBe(0);
 });
+
+test('beatTrack respects tempo constraints', () => {
+  const tracker = new BeatTracker();
+  const sr = 22050;
+  const hop = 512;
+  const beats = 6;
+  const { onset } = createOnsetEnvelope(96, sr, hop, beats);
+  const result = tracker.beatTrack({
+    onsetEnvelope: onset,
+    sr,
+    hopLength: hop,
+    units: 'frames',
+    sparse: true,
+    minBpm: 70,
+    maxBpm: 180,
+  });
+  expect(result.beats.length).toBe(beats);
+  expect(Math.round(result.tempo)).toBe(96);
+});
