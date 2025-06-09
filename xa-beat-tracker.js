@@ -1,3 +1,66 @@
+
+// Lightweight FFT implementation integrated directly for browser use
+function fft(signal) {
+  const complexSignal = signal.map((v) => ({ real: v, imag: 0 }))
+  return _fftComplex(complexSignal)
+}
+
+function ifft(spectrum) {
+  const N = spectrum.length
+  const conjugated = spectrum.map((c) => ({ real: c.real, imag: -c.imag }))
+  const transformed = _fftComplex(conjugated)
+  return Float32Array.from(transformed.map((c) => c.real / N))
+}
+
+function _fftComplex(x) {
+  const N = x.length
+  if (N <= 1) return x.map((c) => ({ real: c.real, imag: c.imag }))
+  if (N % 2 !== 0) return _dftComplex(x)
+  const even = []
+  const odd = []
+  for (let i = 0; i < N; i += 2) {
+    even.push(x[i])
+    odd.push(x[i + 1])
+  }
+  const fftEven = _fftComplex(even)
+  const fftOdd = _fftComplex(odd)
+  const result = new Array(N)
+  for (let k = 0; k < N / 2; k++) {
+    const angle = (-2 * Math.PI * k) / N
+    const cos = Math.cos(angle)
+    const sin = Math.sin(angle)
+    const oddReal = fftOdd[k].real * cos - fftOdd[k].imag * sin
+    const oddImag = fftOdd[k].real * sin + fftOdd[k].imag * cos
+    result[k] = {
+      real: fftEven[k].real + oddReal,
+      imag: fftEven[k].imag + oddImag,
+    }
+    result[k + N / 2] = {
+      real: fftEven[k].real - oddReal,
+      imag: fftEven[k].imag - oddImag,
+    }
+  }
+  return result
+}
+
+function _dftComplex(x) {
+  const N = x.length
+  const out = new Array(N)
+  for (let k = 0; k < N; k++) {
+    let real = 0
+    let imag = 0
+    for (let n = 0; n < N; n++) {
+      const angle = (-2 * Math.PI * k * n) / N
+      const cos = Math.cos(angle)
+      const sin = Math.sin(angle)
+      real += x[n].real * cos - x[n].imag * sin
+      imag += x[n].real * sin + x[n].imag * cos
+    }
+    out[k] = { real, imag }
+  }
+  return out
+}
+
 /**
  * Advanced Beat Tracking Module for JavaScript
  * Implements dynamic programming beat tracking and predominant local pulse detection
@@ -195,50 +258,62 @@ export class BeatTracker {
       }
     }
 
-    // Find peak values and normalize
-    const ftmag = ftgram.map((frame) =>
-        frame.map((bin) =>
-            Math.log1p(1e6 * Math.sqrt(bin.real * bin.real + bin.imag * bin.imag)),
-        ),
-    )
-
-    // Apply prior if provided
-    if (prior) {
-      for (let i = 0; i < ftmag.length; i++) {
-        for (let j = 0; j < ftmag[i].length; j++) {
-          ftmag[i][j] += prior(tempoFrequencies[j])
-        }
-      }
-    }
-
-    // Keep only values at peak
+    // Apply prior and find peak bin for each frame
     for (let i = 0; i < ftgram.length; i++) {
-      const peakValue = Math.max(...ftmag[i])
-      for (let j = 0; j < ftgram[i].length; j++) {
-        if (ftmag[i][j] < peakValue) {
-          ftgram[i][j] = { real: 0, imag: 0 }
-        }
+]      let peakValue = -Infinity
+      for (let k = 0; k < ftmag[i].length; k++) {
+        if (ftmag[i][k] > peakValue) peakValue = ftmag[i][k]
       }
-    }
+      let maxIdx = -1
+      let maxMag = -Infinity
+
+      for (let j = 0; j < ftgram[i].length; j++) {
+        const freq = tempoFrequencies[j]
+
+        // Skip bins outside allowed tempo range
+        if (
+            (tempoMin !== null && freq < tempoMin) ||
+            (tempoMax !== null && freq > tempoMax)
+        ) {
+          ftgram[i][j] = { real: 0, imag: 0 }
+          continue
+        }
 
     // Normalize to keep phase information
     for (let i = 0; i < ftgram.length; i++) {
-      const maxMag = Math.max(
-          ...ftgram[i].map((bin) =>
-              Math.sqrt(bin.real * bin.real + bin.imag * bin.imag),
-          ),
-      )
+      let maxMag = -Infinity
       for (let j = 0; j < ftgram[i].length; j++) {
-        // Calculate magnitude but don't need to store it
-        Math.sqrt(
+        const mag = Math.sqrt(
             ftgram[i][j].real * ftgram[i][j].real +
             ftgram[i][j].imag * ftgram[i][j].imag,
         )
-        const normFactor = Math.sqrt(1e-10 + maxMag)
-        if (normFactor > 0) {
-          ftgram[i][j].real /= normFactor
-          ftgram[i][j].imag /= normFactor
+        if (mag > maxMag) maxMag = mag
+      }
+      for (let j = 0; j < ftgram[i].length; j++) {
+        // Calculate magnitude but don't need to store it
+        Math.sqrt(
+
+            ftgram[i][j].real * ftgram[i][j].real +
+            ftgram[i][j].imag * ftgram[i][j].imag,
+        )
+
+        if (mag > maxMag) {
+          maxMag = mag
+          maxIdx = j
         }
+      }
+
+      // Zero out all bins except the maximum
+      for (let j = 0; j < ftgram[i].length; j++) {
+        if (j !== maxIdx) {
+          ftgram[i][j] = { real: 0, imag: 0 }
+        }
+      }
+
+      // Normalize the remaining bin to unit magnitude
+      if (maxIdx >= 0 && maxMag > 0) {
+        ftgram[i][maxIdx].real /= maxMag
+        ftgram[i][maxIdx].imag /= maxMag
       }
     }
 
@@ -508,7 +583,11 @@ export class BeatTracker {
     const cumScore = new Float32Array(N)
 
     // Initialize
-    const scoreThresh = 0.01 * Math.max(...localScore)
+    let maxScore = -Infinity
+    for (let i = 0; i < localScore.length; i++) {
+      if (localScore[i] > maxScore) maxScore = localScore[i]
+    }
+    const scoreThresh = 0.01 * maxScore
     backlink[0] = -1
     cumScore[0] = localScore[0]
 
@@ -654,7 +733,10 @@ export class BeatTracker {
 
   _findPeaksWithProminence(signal, minProminence = 0.1) {
     const peaks = []
-    const maxVal = Math.max(...signal)
+    let maxVal = -Infinity
+    for (let i = 0; i < signal.length; i++) {
+      if (signal[i] > maxVal) maxVal = signal[i]
+    }
 
     for (let i = 1; i < signal.length - 1; i++) {
       if (signal[i] > signal[i - 1] && signal[i] > signal[i + 1]) {
@@ -689,24 +771,8 @@ export class BeatTracker {
   }
 
   _fft(signal) {
-    // Simplified FFT - replace with proper library like FFTJS for production
-    const N = signal.length
-    const result = []
-
-    for (let k = 0; k < N; k++) {
-      let real = 0
-      let imag = 0
-
-      for (let n = 0; n < N; n++) {
-        const angle = (-2 * Math.PI * k * n) / N
-        real += signal[n] * Math.cos(angle)
-        imag += signal[n] * Math.sin(angle)
-      }
-
-      result.push({ real, imag })
-    }
-
-    return result
+    // Delegate to lightweight internal FFT implementation
+    return fft(signal)
   }
 
   _istft(stft, hopLength, nFft, length) {
@@ -732,21 +798,8 @@ export class BeatTracker {
   }
 
   _ifft(spectrum) {
-    const N = spectrum.length
-    const result = new Float32Array(N)
-
-    for (let n = 0; n < N; n++) {
-      let value = 0
-      for (let k = 0; k < N; k++) {
-        const angle = (2 * Math.PI * k * n) / N
-        value +=
-            spectrum[k].real * Math.cos(angle) -
-            spectrum[k].imag * Math.sin(angle)
-      }
-      result[n] = value / N
-    }
-
-    return result
+    // Delegate to lightweight internal FFT implementation
+    return ifft(spectrum)
   }
 
   _fourierTempoFrequencies(sr, hopLength, winLength) {
@@ -762,11 +815,16 @@ export class BeatTracker {
   }
 
   _normalize(x) {
-    const max = Math.max(...x)
-    const min = Math.min(...x)
+    let max = -Infinity
+    let min = Infinity
+    for (let i = 0; i < x.length; i++) {
+      const v = x[i]
+      if (v > max) max = v
+      if (v < min) min = v
+    }
     const range = max - min
 
-    if (range === 0) return x
+    if (range === 0) return x.map(() => 0)
 
     return x.map((v) => (v - min) / range)
   }
