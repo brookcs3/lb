@@ -394,7 +394,18 @@ export class BeatTracker {
     const peaks = this._findPeaksWithProminence(autocorr)
 
     if (peaks.length === 0) {
-      return startBpm // Fallback to initial guess
+      // No clear peak found. Fall back to the strongest correlation value
+      let bestLagIdx = 0
+      let bestScore = -Infinity
+      for (let i = 0; i < autocorr.length; i++) {
+        if (autocorr[i] > bestScore) {
+          bestScore = autocorr[i]
+          bestLagIdx = i
+        }
+      }
+      const bestLag = minLag + bestLagIdx
+      const fallbackBpm = (60 * sr) / (bestLag * hopLength)
+      return Math.max(minBpm, Math.min(maxBpm, fallbackBpm))
     }
 
     // Convert best peak to BPM
