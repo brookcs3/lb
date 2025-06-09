@@ -251,10 +251,6 @@ export class BeatTracker {
         winLength,
     )
 
-    // Pre-compute magnitude of each tempogram bin
-    const ftmag = ftgram.map((frame) =>
-        frame.map((c) => Math.sqrt(c.real * c.real + c.imag * c.imag)),
-    )
 
     // Apply tempo constraints
     for (let i = 0; i < ftgram.length; i++) {
