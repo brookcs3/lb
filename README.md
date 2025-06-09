@@ -39,6 +39,18 @@ The UI exposes several shortcut buttons. After loading an audio file you can:
   `tracker.plp` to estimate tempo and logs the pulse curve length for
   diagnostics.
 
+Beat detection can sometimes lock onto a metrical level that is half or
+double the intended tempo. This happens when subdivisions or higher-level
+repeats dominate the autocorrelation peak search. Constraining the tempo
+range helps avoid these octave errors:
+
+```js
+// Restrict search to 80--160 BPM
+const quick = quickBeatTrack(y, sr, { minBpm: 80, maxBpm: 160 });
+const beats = beat_track(y, sr, { units: 'time', minBpm: 80, maxBpm: 160 });
+const bpm = tempo(onset, sr, 512, 120, { minBpm: 80, maxBpm: 160 });
+```
+
 These shortcuts make it easy to test the library without writing code.
 
 ### Custom BPM range
