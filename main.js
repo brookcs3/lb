@@ -128,6 +128,16 @@ const ui = new BeatTrackingUI();
 
     }
 
+    function showResultBanner(bpm, confidence) {
+      bpmValue.textContent = bpm.toFixed ? bpm.toFixed(1) : bpm;
+      if (confidence !== undefined) {
+        confValue.textContent = `${(confidence * 100).toFixed(1)}% confidence`;
+      } else {
+        confValue.textContent = '';
+      }
+      resultBanner.style.display = 'block';
+    }
+
     // Catch unexpected promise rejections to keep the UI responsive
     window.addEventListener('unhandledrejection', (event) => {
       console.error('Unhandled promise rejection:', event.reason);
@@ -377,6 +387,7 @@ const ui = new BeatTrackingUI();
           if (tempogram.peakTempos.length > 1) {
             logMessage(`   🎼 Multiple tempo candidates detected - possible tempo changes or polyrhythm`);
           }
+          showResultBanner(globalTempo, confidence);
         } else {
           throw new Error(result.error);
 
