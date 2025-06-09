@@ -18,6 +18,7 @@
     const expandAllBtn = document.getElementById("expandAllBtn");
     const logToggle = document.getElementById("logToggle");
     const waveformToggle = document.getElementById("waveformToggle");
+    const analysisProgress = document.getElementById("analysisProgress");
 
     const showPlp = () => {
       plpBtn.removeAttribute('hidden');
@@ -64,6 +65,18 @@
     // Utility: Clear log output
     function clearLog() {
       logOutput.textContent = "";
+    }
+
+    function setProgress(value) {
+      analysisProgress.hidden = false;
+      analysisProgress.value = value;
+      analysisProgress.setAttribute('aria-valuenow', value);
+    }
+
+    function hideProgress() {
+      analysisProgress.hidden = true;
+      analysisProgress.value = 0;
+      analysisProgress.setAttribute('aria-valuenow', 0);
     }
 
     // Catch unexpected promise rejections to keep the UI responsive
@@ -204,6 +217,8 @@
         logMessage(`Window: ${windowSize}s, Hop: ${hopSize}s`);
         if (isLargeFile) logMessage("⚡ Large file detected - using optimized analysis");
 
+        setProgress(0);
+
         const startTime = performance.now();
         const result = await analyzeWithProgress(y, sr, windowSize, hopSize);
         const analysisTime = (performance.now() - startTime) / 1000;
@@ -319,6 +334,7 @@
         tempoBtn.disabled = false;
         plpBtn.disabled = false;
         playBtn.disabled = false;
+        hideProgress();
       }
     };
 
@@ -832,6 +848,7 @@
           logMessage(`[${i.toString().padStart(2,'0')}] t=${times[i].toFixed(1)}s → ${localResult.bpm.toFixed(1)} BPM${deviationStr} ${status} (corr: ${localResult.correlation.toFixed(3)})`);
           const progress = ((i / numWindows) * 100).toFixed(0);
           bpmDisplay.textContent = `BPM: ${globalTempo.bpm.toFixed(1)} (${progress}% analyzed)`;
+          setProgress(parseInt(progress, 10));
           if (i % 2 === 0) await new Promise(resolve => setTimeout(resolve, 10));
         }
 
@@ -882,6 +899,7 @@
         if (i % 200 === 0) {
           const progress = ((i / frames) * 100).toFixed(0);
           logMessage(` Computing onsets... ${progress}% (frame ${i}/${frames}, flux: ${onset[i].toFixed(3)})`);
+          setProgress(parseInt(progress, 10));
           await new Promise(resolve => setTimeout(resolve, 1));
         }
       }
@@ -913,6 +931,7 @@
         if (lagIdx % 20 === 0) {
           const progress = ((lagIdx / autocorr.length) * 100).toFixed(0);
           logMessage(` Autocorr ${progress}%: lag=${lag} → ${bpm.toFixed(1)} BPM (corr: ${autocorr[lagIdx].toFixed(4)})`);
+          setProgress(parseInt(progress, 10));
           await new Promise(resolve => setTimeout(resolve, 1));
         }
       }
@@ -972,6 +991,7 @@
           const progress = ((i / frames) * 100).toFixed(0);
           const frameEnergy = frame.reduce((sum, x) => sum + x*x, 0);
           logMessage(` Tempogram ${progress}%: frame ${i}/${frames} (energy: ${frameEnergy.toFixed(3)})`);
+          setProgress(parseInt(progress, 10));
           await new Promise(resolve => setTimeout(resolve, 1));
         }
       }
