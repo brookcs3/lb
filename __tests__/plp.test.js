@@ -4,33 +4,43 @@ function createOnsetEnvelope(bpm, sr, hop, beats) {
   const framesPerBeat = Math.round((sr / hop) * (60 / bpm));
   const length = framesPerBeat * beats;
   const onset = new Float32Array(length).fill(0);
-
   for (let i = 0; i < length; i += framesPerBeat) {
-    for (let j = 0; j < 5; j++) {
-      if (i + j < length) onset[i + j] = 1 - j * 0.2;
-    }
+    onset[i] = 1;
   }
-
   return { onset, framesPerBeat };
 }
 
-test('plp pulse peaks align with beat frames', () => {
+function findPeaks(data) {
+  const peaks = [];
+  for (let i = 1; i < data.length - 1; i++) {
+    if (data[i] > data[i - 1] && data[i] >= data[i + 1]) {
+      peaks.push(i);
+    }
+  }
+  return peaks;
+}
+
+ test('plp pulse peaks align with expected beat frames', () => {
   const tracker = new BeatTracker();
   const sr = 22050;
   const hop = 512;
   const beats = 20;
   const { onset, framesPerBeat } = createOnsetEnvelope(120, sr, hop, beats);
   const pulse = tracker.plp({ onsetEnvelope: onset, sr, hopLength: hop });
-
-  const maxima = tracker._localMax(pulse);
-  const peakFrames = [];
-  for (let i = 0; i < maxima.length; i++) {
-    if (maxima[i]) peakFrames.push(i);
+  const peaks = findPeaks(Array.from(pulse));
+  const tolerance = 2;
+  for (let i = 2; i < beats - 2; i++) {
+    const expected = i * framesPerBeat;
+    const hasPeak = peaks.some((p) => Math.abs(p - expected) <= tolerance);
+    expect(hasPeak).toBe(true);
   }
+});
 
-  for (let b = 0; b < 8; b++) {
-    const expected = b * framesPerBeat;
-    const found = peakFrames.find((p) => Math.abs(p - expected) <= 2);
-    expect(found).toBeDefined();
-  }
+test('tempoEstimation returns 120 BPM for synthetic envelope', () => {
+  const tracker = new BeatTracker();
+  const sr = 22050;
+  const hop = 512;
+  const { onset } = createOnsetEnvelope(120, sr, hop, 8);
+  const tempo = tracker.tempoEstimation(onset, sr, hop, 120);
+  expect(Math.round(tempo)).toBe(120);
 });
