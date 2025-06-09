@@ -94,6 +94,7 @@
         ui.tracker.audioContext = audioContext;
         const arrayBuffer = await file.arrayBuffer();
         audioBuffer = await audioContext.decodeAudioData(arrayBuffer);
+        drawWaveform();
         bpmDisplay.textContent = "BPM: --";
         logMessage("✅ Audio file loaded successfully");
         logMessage(`Duration: ${audioBuffer.duration.toFixed(1)}s, Sample Rate: ${audioBuffer.sampleRate}Hz`);
