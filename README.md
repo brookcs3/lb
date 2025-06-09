@@ -23,6 +23,16 @@ npm run build        # create the production build in dist/
 npm run preview      # serve the built files locally
 ```
 
+## Deploying to GitHub Pages
+
+Build the site and publish the output to the `gh-pages` branch:
+
+```sh
+npm run deploy
+```
+
+After pushing, configure the repository to serve Pages from that branch.
+
 ## Browser requirements
 
 A modern browser with Web Audio API support (e.g. current versions of Chrome, Edge, or Firefox) is required for beat tracking.
