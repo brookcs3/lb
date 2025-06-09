@@ -1,5 +1,4 @@
 import { Worker } from 'worker_threads';
-import { fileURLToPath } from 'url';
 
 function createOnsetEnvelope(bpm, sr, hop, beats) {
   const framesPerBeat = Math.round((sr / hop) * (60 / bpm));
