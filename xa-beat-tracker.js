@@ -237,6 +237,12 @@ export class BeatTracker {
 
     // Compute Fourier tempogram
     const ftgram = this.fourierTempogram(onset, sr, hopLength, winLength)
+    // Magnitudes of each STFT bin
+    const ftmag = ftgram.map((frame) =>
+      frame.map((bin) =>
+        Math.sqrt(bin.real * bin.real + bin.imag * bin.imag)
+      ),
+    )
 
     // Get tempo frequencies
     const tempoFrequencies = this._fourierTempoFrequencies(
@@ -254,47 +260,34 @@ export class BeatTracker {
             (tempoMax !== null && freq > tempoMax)
         ) {
           ftgram[i][j] = { real: 0, imag: 0 }
+          ftmag[i][j] = 0
         }
       }
     }
 
-    // Apply prior and find peak bin for each frame
+    // Apply prior and keep only the strongest bin for each frame
     for (let i = 0; i < ftgram.length; i++) {
-      let peakValue = -Infinity
-      for (let k = 0; k < ftmag[i].length; k++) {
-        if (ftmag[i][k] > peakValue) peakValue = ftmag[i][k]
-      }
       let maxIdx = -1
-      let maxMag = -Infinity
+      let maxWeight = -Infinity
+      let maxMag = 0
 
       for (let j = 0; j < ftgram[i].length; j++) {
-        const freq = tempoFrequencies[j]
+        const mag = ftmag[i][j]
+        const weight = prior ? prior(tempoFrequencies[j]) : 1
+        const weighted = mag * weight
 
-        // Skip bins outside allowed tempo range
-        if (
-            (tempoMin !== null && freq < tempoMin) ||
-            (tempoMax !== null && freq > tempoMax)
-        ) {
-          ftgram[i][j] = { real: 0, imag: 0 }
-          continue
-        }
-
-        const mag = Math.sqrt(
-            ftgram[i][j].real * ftgram[i][j].real +
-            ftgram[i][j].imag * ftgram[i][j].imag,
-        )
-        if (mag > maxMag) {
-          maxMag = mag
+        if (weighted > maxWeight) {
+          maxWeight = weighted
           maxIdx = j
+          maxMag = mag
         }
       }
 
-      // Normalize the remaining bin to unit magnitude and zero others
       for (let j = 0; j < ftgram[i].length; j++) {
         if (j === maxIdx && maxMag > 0) {
           ftgram[i][j].real /= maxMag
           ftgram[i][j].imag /= maxMag
-        } else if (j !== maxIdx) {
+        } else {
           ftgram[i][j] = { real: 0, imag: 0 }
         }
       }
