@@ -1,7 +1,7 @@
 
 // Lightweight FFT implementation integrated directly for browser use
 function fft(signal) {
-  const complexSignal = signal.map((v) => ({ real: v, imag: 0 }))
+  const complexSignal = Array.from(signal, (v) => ({ real: v, imag: 0 }))
   return _fftComplex(complexSignal)
 }
 
@@ -249,6 +249,11 @@ export class BeatTracker {
         sr,
         hopLength,
         winLength,
+    )
+
+    // Pre-compute magnitude of each tempogram bin
+    const ftmag = ftgram.map((frame) =>
+        frame.map((c) => Math.sqrt(c.real * c.real + c.imag * c.imag)),
     )
 
     // Apply tempo constraints
