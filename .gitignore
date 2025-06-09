@@ -3,4 +3,4 @@ log.txt
 *.log
 logs/
 node_modules/
-dist/
+# Build output is committed to gh-pages
