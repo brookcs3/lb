@@ -36,3 +36,14 @@ mkdir -p logs
 ```
 
 Log files placed here will be ignored by Git.
+
+## Running tests
+
+Unit tests use [Jest](https://jestjs.io/). Install dependencies and run:
+
+```sh
+npm install
+npm test
+```
+
+The tests cover key functions in `xa-beat-tracker.js` such as `beatTrack` and `tempoEstimation`.
