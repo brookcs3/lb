@@ -276,7 +276,30 @@ const ui = new BeatTrackingUI();
           const { times, tempo, globalTempo: resultGlobalTempo, confidence, candidates, tempogram, onsetEnvelope } = result;
           logMessage(`✅ Analysis completed in ${analysisTime.toFixed(1)}s`);
           globalTempo = parseFloat(resultGlobalTempo.toFixed(1)); // Store for live tracking
-          logMessage(`🎯 GLOBAL TEMPO: ${globalTempo} BPM (${(confidence * 100).toFixed(1)}% confidence)`);
+
+          // Adjust tempo to prefer the 90-180 BPM range
+          let displayTempo = globalTempo;
+          let altTempo = null;
+          let altLabel = "";
+          if (globalTempo < 90) {
+            const doubled = globalTempo * 2;
+            if (doubled >= 90 && doubled <= 180) {
+              displayTempo = parseFloat(doubled.toFixed(1));
+              altTempo = globalTempo;
+              altLabel = "double-time";
+              globalTempo = displayTempo; // Use the more plausible tempo
+            }
+          } else if (globalTempo > 180) {
+            const halved = globalTempo / 2;
+            if (halved >= 90 && halved <= 180) {
+              displayTempo = parseFloat(halved.toFixed(1));
+              altTempo = globalTempo;
+              altLabel = "half-time";
+              globalTempo = displayTempo; // Use the more plausible tempo
+            }
+          }
+          const altText = altTempo ? ` (${altLabel} \u2248 ${altTempo.toFixed(1)} BPM)` : "";
+          logMessage(`🎯 GLOBAL TEMPO: ${displayTempo} BPM${altText} (${(confidence * 100).toFixed(1)}% confidence)`);
 
           logMessage(`🏆 Final global tempo candidates (raw autocorrelation only):`);
           for (let i = 0; i < Math.min(candidates.length, 5); i++) {
@@ -333,8 +356,12 @@ const ui = new BeatTrackingUI();
             displayStatus += " ✓";
           }
           
-          bpmDisplay.textContent = `BPM: ${globalTempo} (${displayStatus})`;
-          showResultBanner(globalTempo, confidence);
+          const detailParts = [];
+          if (altTempo) {
+            detailParts.push(`${altLabel} \u2248 ${altTempo.toFixed(1)} BPM`);
+          }
+          detailParts.push(displayStatus);
+          bpmDisplay.textContent = `BPM: ${globalTempo.toFixed(1)} (${detailParts.join(', ')})`;
 
           logMessage(`🎉 FINAL RESULT:`);
           if (confidence > 0.7 && tempogramConfirmed) {
