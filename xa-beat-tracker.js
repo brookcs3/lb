@@ -1,7 +1,8 @@
 
 // Lightweight FFT implementation integrated directly for browser use
 function fft(signal) {
-  const complexSignal = signal.map((v) => ({ real: v, imag: 0 }))
+  const arr = Array.isArray(signal) ? signal : Array.from(signal)
+  const complexSignal = arr.map((v) => ({ real: v, imag: 0 }))
   return _fftComplex(complexSignal)
 }
 
