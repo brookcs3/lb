@@ -11,13 +11,21 @@
     const plpBtn = document.getElementById("plpBtn");
     const clickBtn = document.getElementById("clickBtn");
     const bpmDisplay = document.getElementById("bpm");
+    const resultBanner = document.getElementById("resultBanner");
+    const bpmValue = document.getElementById("bpmValue");
+    const confValue = document.getElementById("confValue");
     const logOutput = document.getElementById("logOutput");
     const waveformCanvas = document.getElementById("waveformCanvas");
     const playhead = document.getElementById("playhead");
+    const progressContainer = document.getElementById("progressContainer");
+    const progressBar = document.getElementById("progressBar");
     const collapseAllBtn = document.getElementById("collapseAllBtn");
     const expandAllBtn = document.getElementById("expandAllBtn");
     const logToggle = document.getElementById("logToggle");
     const waveformToggle = document.getElementById("waveformToggle");
+
+    // Hide result banner until analysis is complete
+    resultBanner.style.display = 'none';
 
     const showPlp = () => {
       plpBtn.removeAttribute('hidden');
@@ -85,6 +93,7 @@ const ui = new BeatTrackingUI();
   const estimateGlobalTempoWorker = (onsetEnvelope, sr) => runWorker('estimateGlobalTempo', { onsetEnvelope, sr });
   const computeFourierTempogramWorker = (onsetEnvelope, sr) => runWorker('computeFourierTempogram', { onsetEnvelope, sr });
 
+
     // Regenerate the click track whenever beat times are updated
     function updateClickBuffer() {
       if (audioBuffer && beatTimes && beatTimes.length > 0) {
@@ -103,6 +112,12 @@ const ui = new BeatTrackingUI();
     // Utility: Clear log output
     function clearLog() {
       logOutput.textContent = "";
+    }
+
+    function showResultBanner(bpm, confidence) {
+      bpmValue.textContent = bpm.toFixed(1);
+      confValue.textContent = `(${(confidence * 100).toFixed(1)}% confidence)`;
+      resultBanner.style.display = 'block';
     }
 
     // Catch unexpected promise rejections to keep the UI responsive
@@ -130,6 +145,7 @@ const ui = new BeatTrackingUI();
         ui.tracker.audioContext = audioContext;
         const arrayBuffer = await file.arrayBuffer();
         audioBuffer = await audioContext.decodeAudioData(arrayBuffer);
+        drawWaveform();
         bpmDisplay.textContent = "BPM: --";
         logMessage("✅ Audio file loaded successfully");
         logMessage(`Duration: ${audioBuffer.duration.toFixed(1)}s, Sample Rate: ${audioBuffer.sampleRate}Hz`);
@@ -221,8 +237,6 @@ const ui = new BeatTrackingUI();
     };
 
     // Analyze button click handler
-    analyzeBtn.onclick = async () => {
-      if (!audioBuffer) return;
 
       try {
         analyzeBtn.disabled = true;
@@ -237,6 +251,7 @@ const ui = new BeatTrackingUI();
         const windowSize = isLargeFile ? 8.0 : 4.0;
         const hopSize = isLargeFile ? 2.0 : 1.0;
         bpmDisplay.textContent = "BPM: Analyzing...";
+        resultBanner.style.display = 'none';
         clearLog();
         logMessage("🔍 Starting BPM analysis");
         logMessage(`Audio: ${y.length.toLocaleString()} samples (${(y.length/sr).toFixed(1)}s)`);
@@ -260,52 +275,33 @@ const ui = new BeatTrackingUI();
             logMessage(` ${i+1}. ${candidate.bpm.toFixed(1)} BPM (score: ${candidate.score.toFixed(4)}) ${isWinner}`);
           }
 
-          logMessage(`📈 FOURIER TEMPOGRAM ANALYSIS:`);
-          logMessage(` Time-frequency resolution: ${tempogram.frames} frames × ${tempogram.frequencies.length} frequencies`);
-          logMessage(` Total spectral energy: ${tempogram.totalEnergy.toFixed(3)}`);
-          logMessage(` Energy distribution:`);
 
-          if (tempogram.peakTempos.length > 0) {
-            logMessage(`🎼 TEMPOGRAM PEAK TEMPOS (spectral analysis):`);
-            for (let i = 0; i < Math.min(tempogram.peakTempos.length, 8); i++) {
-              const peak = tempogram.peakTempos[i];
-              const globalMatch = Math.abs(peak.bpm - globalTempo) < 5 ? "🎯" : "";
-              logMessage(` ${i+1}. ${peak.bpm.toFixed(1)} BPM (energy: ${peak.energy.toFixed(4)}, frames: ${peak.frameCount}/${tempogram.frames} frames, ${(peak.prominence*100).toFixed(1)}%) ${globalMatch}`);
-            }
+      analyzeBtn.disabled = true;
+      quickAnalyzeBtn.disabled = true;
+      beatTrackBtn.disabled = true;
+      tempoBtn.disabled = true;
+      plpBtn.disabled = true;
+      playBtn.disabled = true;
 
-            const tempogramTop = tempogram.peakTempos[0];
-            const agreementError = Math.abs(tempogramTop.bpm - globalTempo);
-            logMessage(`🔍 Method agreement: Global=${globalTempo.toFixed(1)} vs Tempogram=${tempogramTop.bpm.toFixed(1)} BPM (±${agreementError.toFixed(1)})`);
+      const y = audioBuffer.getChannelData(0).slice();
+      const sr = audioBuffer.sampleRate;
 
-            if (agreementError < 5) logMessage(`✅ EXCELLENT: Both methods agree within ±5 BPM`);
-            else if (agreementError < 15) logMessage(`⚠️ MODERATE: Methods agree within ±15 BPM`);
-            else logMessage(`❌ DISAGREEMENT: Methods differ by >15 BPM - complex tempo`);
-          } else {
-            logMessage(` ❓ No clear peaks found in tempogram - complex/weak tempo`);
-          }
+      progressBar.value = 0;
+      progressContainer.style.display = 'block';
 
-          const deviations = tempo.map(t => Math.abs(t - globalTempo));
-          const avgDeviation = deviations.reduce((a, b) => a + b, 0) / deviations.length;
-          const maxDeviation = Math.max(...deviations);
-          logMessage(`📊 TEMPO STABILITY ANALYSIS:`);
-          logMessage(` Average deviation: ±${avgDeviation.toFixed(1)} BPM`);
-          logMessage(` Maximum deviation: ±${maxDeviation.toFixed(1)} BPM`);
-          logMessage(` Stability windows: ${tempo.filter(t => Math.abs(t - globalTempo) < 5).length}/${tempo.length} stable (±5 BPM)`);
+      if (analyzerWorker) {
+        analyzerWorker.terminate();
+      }
+      analyzerWorker = new Worker('analyzerWorker.js');
 
-          logMessage(`📈 WINDOW-BY-WINDOW SUMMARY:`);
-          const stableCount = tempo.filter(t => Math.abs(t - globalTempo) < 5).length;
-          const moderateCount = tempo.filter(t => Math.abs(t - globalTempo) >= 5 && Math.abs(t - globalTempo) < 15).length;
-          const unstableCount = tempo.filter(t => Math.abs(t - globalTempo) >= 15).length;
-          logMessage(` ✅ Stable (±5 BPM): ${stableCount} windows`);
-          logMessage(`   ⚠️ Moderate (5-15 BPM): ${moderateCount} windows`);
-          logMessage(`   ❌ Unstable (>15 BPM): ${unstableCount} windows`);
-
-          logMessage(`🎵 Performing dynamic beat tracking...`);
-          const dynamicResult = dynamicBeatTrack(y, sr, windowSize, hopSize);
-          beatTimes = dynamicResult.beats;
-          logMessage(`🥁 Beat tracking completed: ${beatTimes.length} beats detected (dynamic tempo)`);
-
-          logMessage(`🎵 Generating click track for verification...`);
+      analyzerWorker.onmessage = (e) => {
+        const { type } = e.data;
+        if (type === 'progress') {
+          progressBar.value = e.data.value;
+        } else if (type === 'result') {
+          beatTimes = e.data.beats;
+          globalTempo = parseFloat(e.data.bpm.toFixed(1));
+          bpmDisplay.textContent = `BPM: ${globalTempo}`;
           updateClickBuffer();
           logMessage(`✅ Click track generated successfully`);
           clickBtn.disabled = false; // Enable click track button
@@ -328,6 +324,7 @@ const ui = new BeatTrackingUI();
           }
           
           bpmDisplay.textContent = `BPM: ${globalTempo} (${displayStatus})`;
+          showResultBanner(globalTempo, confidence);
 
           logMessage(`🎉 FINAL RESULT:`);
           if (confidence > 0.7 && tempogramConfirmed) {
@@ -345,22 +342,12 @@ const ui = new BeatTrackingUI();
           }
         } else {
           throw new Error(result.error);
+
         }
-      } catch (error) {
-        console.error("Analysis error:", error);
-        bpmDisplay.textContent = "BPM: Error";
-        logMessage("❌ Analysis failed: " + error.message);
+      };
 
-      } finally {
-        analyzeBtn.disabled = false;
-        quickAnalyzeBtn.disabled = false;
-        beatTrackBtn.disabled = false;
-        tempoBtn.disabled = false;
-        plpBtn.disabled = false;
-        playBtn.disabled = false;
-      }
+      analyzerWorker.postMessage({ command: 'analyze', audioData: y, sampleRate: sr }, [y.buffer]);
     };
-
     // Quick Analyze button click handler
     quickAnalyzeBtn.onclick = () => {
       if (!audioBuffer) return;
@@ -372,6 +359,7 @@ const ui = new BeatTrackingUI();
         plpBtn.disabled = true;
         playBtn.disabled = true;
         bpmDisplay.textContent = "BPM: Quick...";
+        resultBanner.style.display = 'none';
         clearLog();
         logMessage("⚡ Quick BPM analysis");
         const y = audioBuffer.getChannelData(0);
@@ -381,6 +369,7 @@ const ui = new BeatTrackingUI();
           beatTimes = result.beats;
           globalTempo = parseFloat(result.bpm.toFixed(1));
           bpmDisplay.textContent = `BPM: ${globalTempo} (QUICK)`;
+          showResultBanner(globalTempo, 1);
           updateClickBuffer();
           clickBtn.disabled = false;
           logMessage(`✅ Quick BPM: ${globalTempo} BPM`);
@@ -412,6 +401,7 @@ const ui = new BeatTrackingUI();
         plpBtn.disabled = true;
         playBtn.disabled = true;
         bpmDisplay.textContent = "BPM: beat_track...";
+        resultBanner.style.display = 'none';
         clearLog();
         logMessage("🔧 beat_track() helper");
         const y = audioBuffer.getChannelData(0);
@@ -420,6 +410,7 @@ const ui = new BeatTrackingUI();
         beatTimes = result.beats;
         globalTempo = parseFloat(result.tempo.toFixed(1));
         bpmDisplay.textContent = `BPM: ${globalTempo} (beat_track)`;
+        showResultBanner(globalTempo, 1);
         clickBuffer = ui.generateClickTrack(beatTimes, audioBuffer.duration);
         clickBtn.disabled = false;
         logMessage(`✅ beat_track tempo: ${globalTempo} BPM`);
@@ -445,6 +436,7 @@ const ui = new BeatTrackingUI();
         plpBtn.disabled = true;
         playBtn.disabled = true;
         bpmDisplay.textContent = "BPM: tempo...";
+        resultBanner.style.display = 'none';
         clearLog();
         logMessage("🔧 tempo() helper");
         const y = audioBuffer.getChannelData(0);
@@ -454,6 +446,7 @@ const ui = new BeatTrackingUI();
         globalTempo = parseFloat(bpm.toFixed(1));
         beatTimes = [];
         bpmDisplay.textContent = `BPM: ${globalTempo} (tempo)`;
+        showResultBanner(globalTempo, 1);
         logMessage(`✅ tempo: ${globalTempo} BPM`);
       } catch (error) {
         console.error('tempo error:', error);
@@ -478,6 +471,7 @@ const ui = new BeatTrackingUI();
         tempoBtn.disabled = true;
         playBtn.disabled = true;
         bpmDisplay.textContent = "BPM: PLP...";
+        resultBanner.style.display = 'none';
         clearLog();
         logMessage("🔧 PLP analysis");
         const y = audioBuffer.getChannelData(0);
@@ -486,6 +480,7 @@ const ui = new BeatTrackingUI();
         const bpm = tracker.tempoEstimation(pulse, sr);
         globalTempo = parseFloat(bpm.toFixed(1));
         bpmDisplay.textContent = `BPM: ${globalTempo} (PLP)`;
+        showResultBanner(globalTempo, 1);
         logMessage(`✅ PLP BPM: ${globalTempo} BPM`);
         logMessage(`Pulse curve length: ${pulse.length}`);
       } catch (error) {
