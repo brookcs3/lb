@@ -260,7 +260,7 @@ export class BeatTracker {
 
     // Apply prior and find peak bin for each frame
     for (let i = 0; i < ftgram.length; i++) {
-]      let peakValue = -Infinity
+      let peakValue = -Infinity
       for (let k = 0; k < ftmag[i].length; k++) {
         if (ftmag[i][k] > peakValue) peakValue = ftmag[i][k]
       }
@@ -279,41 +279,24 @@ export class BeatTracker {
           continue
         }
 
-    // Normalize to keep phase information
-    for (let i = 0; i < ftgram.length; i++) {
-      let maxMag = -Infinity
-      for (let j = 0; j < ftgram[i].length; j++) {
         const mag = Math.sqrt(
             ftgram[i][j].real * ftgram[i][j].real +
             ftgram[i][j].imag * ftgram[i][j].imag,
         )
-        if (mag > maxMag) maxMag = mag
-      }
-      for (let j = 0; j < ftgram[i].length; j++) {
-        // Calculate magnitude but don't need to store it
-        Math.sqrt(
-
-            ftgram[i][j].real * ftgram[i][j].real +
-            ftgram[i][j].imag * ftgram[i][j].imag,
-        )
-
         if (mag > maxMag) {
           maxMag = mag
           maxIdx = j
         }
       }
 
-      // Zero out all bins except the maximum
+      // Normalize the remaining bin to unit magnitude and zero others
       for (let j = 0; j < ftgram[i].length; j++) {
-        if (j !== maxIdx) {
+        if (j === maxIdx && maxMag > 0) {
+          ftgram[i][j].real /= maxMag
+          ftgram[i][j].imag /= maxMag
+        } else if (j !== maxIdx) {
           ftgram[i][j] = { real: 0, imag: 0 }
         }
-      }
-
-      // Normalize the remaining bin to unit magnitude
-      if (maxIdx >= 0 && maxMag > 0) {
-        ftgram[i][maxIdx].real /= maxMag
-        ftgram[i][maxIdx].imag /= maxMag
       }
     }
 

@@ -1,6 +1,7 @@
 # BPM Detector
 
 This project tracks beats from audio files. It uses the Web Audio API to analyze audio and detect tempo in real time. Development is handled with [Vite](https://vitejs.dev/).
+The user interface logic resides in `main.js`, which is loaded by `index.html`.
 
 ## Running the development server
 
@@ -12,6 +13,15 @@ npm run dev
 ```
 
 Vite will launch a local server at http://localhost:3000/ where you can interact with the application.
+
+## Building for production
+
+To create an optimized bundle and preview the result:
+
+```sh
+npm run build        # create the production build in dist/
+npm run preview      # serve the built files locally
+```
 
 ## Browser requirements
 
@@ -49,6 +59,21 @@ Unit tests use [Jest](https://jestjs.io/). Install dependencies and run:
 npm install
 npm test
 ```
+
+## Python demo
+
+An experimental Python script and notebook are provided in the
+`plot_dynamic_beat/` directory. The demo replicates the dynamic beat
+tracking logic using [librosa](https://librosa.org/). You will need
+`librosa`, `matplotlib`, and `numpy` installed to run it:
+
+```sh
+pip install librosa matplotlib numpy
+```
+
+The script expects an audio sample named `snare-accelerate.ogg` inside an
+`audio/` subdirectory. You can obtain this file from the Librosa examples
+repository or substitute any short percussion recording of your own.
 
 
 ## License
