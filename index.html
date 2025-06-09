@@ -15,6 +15,7 @@
     const quickAnalyzeBtn = document.getElementById("quickAnalyzeBtn");
     const beatTrackBtn = document.getElementById("beatTrackBtn");
     const tempoBtn = document.getElementById("tempoBtn");
+    const plpBtn = document.getElementById("plpBtn");
     const clickBtn = document.getElementById("clickBtn");
     const bpmDisplay = document.getElementById("bpm");
     const logOutput = document.getElementById("logOutput");
@@ -66,6 +67,7 @@
       quickAnalyzeBtn.disabled = false;
       beatTrackBtn.disabled = false;
       tempoBtn.disabled = false;
+      plpBtn.disabled = false;
       playBtn.disabled = false;
     });
 
@@ -88,6 +90,7 @@
         quickAnalyzeBtn.disabled = false;
         beatTrackBtn.disabled = false;
         tempoBtn.disabled = false;
+        plpBtn.disabled = false;
         collapseAllBtn.disabled = false;
         expandAllBtn.disabled = false;
       } catch (error) {
@@ -176,6 +179,7 @@
         quickAnalyzeBtn.disabled = true;
         beatTrackBtn.disabled = true;
         tempoBtn.disabled = true;
+        plpBtn.disabled = true;
         playBtn.disabled = true;
         const y = audioBuffer.getChannelData(0);
         const sr = audioBuffer.sampleRate;
@@ -302,6 +306,7 @@
         quickAnalyzeBtn.disabled = false;
         beatTrackBtn.disabled = false;
         tempoBtn.disabled = false;
+        plpBtn.disabled = false;
         playBtn.disabled = false;
       }
     };
@@ -314,6 +319,7 @@
         analyzeBtn.disabled = true;
         beatTrackBtn.disabled = true;
         tempoBtn.disabled = true;
+        plpBtn.disabled = true;
         playBtn.disabled = true;
         bpmDisplay.textContent = "BPM: Quick...";
         clearLog();
@@ -342,6 +348,7 @@
         analyzeBtn.disabled = false;
         beatTrackBtn.disabled = false;
         tempoBtn.disabled = false;
+        plpBtn.disabled = false;
         playBtn.disabled = false;
       }
     };
@@ -352,6 +359,7 @@
       try {
         beatTrackBtn.disabled = true;
         analyzeBtn.disabled = true;
+        plpBtn.disabled = true;
         playBtn.disabled = true;
         bpmDisplay.textContent = "BPM: beat_track...";
         clearLog();
@@ -373,6 +381,7 @@
       } finally {
         beatTrackBtn.disabled = false;
         analyzeBtn.disabled = false;
+        plpBtn.disabled = false;
         playBtn.disabled = false;
       }
     };
@@ -383,6 +392,7 @@
       try {
         tempoBtn.disabled = true;
         analyzeBtn.disabled = true;
+        plpBtn.disabled = true;
         playBtn.disabled = true;
         bpmDisplay.textContent = "BPM: tempo...";
         clearLog();
@@ -402,6 +412,42 @@
       } finally {
         tempoBtn.disabled = false;
         analyzeBtn.disabled = false;
+        plpBtn.disabled = false;
+        playBtn.disabled = false;
+      }
+    };
+
+    // PLP Analyze button
+    plpBtn.onclick = () => {
+      if (!audioBuffer) return;
+      try {
+        plpBtn.disabled = true;
+        analyzeBtn.disabled = true;
+        quickAnalyzeBtn.disabled = true;
+        beatTrackBtn.disabled = true;
+        tempoBtn.disabled = true;
+        playBtn.disabled = true;
+        bpmDisplay.textContent = "BPM: PLP...";
+        clearLog();
+        logMessage("🔧 PLP analysis");
+        const y = audioBuffer.getChannelData(0);
+        const sr = audioBuffer.sampleRate;
+        const pulse = tracker.plp({ y, sr });
+        const bpm = tracker.tempoEstimation(pulse, sr);
+        globalTempo = parseFloat(bpm.toFixed(1));
+        bpmDisplay.textContent = `BPM: ${globalTempo} (PLP)`;
+        logMessage(`✅ PLP BPM: ${globalTempo} BPM`);
+        logMessage(`Pulse curve length: ${pulse.length}`);
+      } catch (error) {
+        console.error('PLP error:', error);
+        bpmDisplay.textContent = 'BPM: Error';
+        logMessage('❌ PLP failed: ' + error.message);
+      } finally {
+        plpBtn.disabled = false;
+        analyzeBtn.disabled = false;
+        quickAnalyzeBtn.disabled = false;
+        beatTrackBtn.disabled = false;
+        tempoBtn.disabled = false;
         playBtn.disabled = false;
       }
     };
@@ -1149,6 +1195,7 @@
     quickAnalyzeBtn.disabled = true;
     beatTrackBtn.disabled = true;
     tempoBtn.disabled = true;
+    plpBtn.disabled = true;
     clickBtn.disabled = true;
     collapseAllBtn.disabled = true;
     expandAllBtn.disabled = true;
@@ -1231,6 +1278,12 @@
     }
     #tempoBtn:hover:not(:disabled) {
       background: #5936a8;
+    }
+    #plpBtn {
+      background: #20c997;
+    }
+    #plpBtn:hover:not(:disabled) {
+      background: #198754;
     }
     #stopBtn {
       background: #dc3545;
@@ -1323,6 +1376,7 @@
       <button id="quickAnalyzeBtn" disabled>⚡ Quick Analyze</button>
       <button id="beatTrackBtn" disabled>beat_track()</button>
       <button id="tempoBtn" disabled>tempo()</button>
+      <button id="plpBtn" disabled>PLP Analyze</button>
       <button id="clickBtn">🔇 Click Track</button>
       <button id="collapseAllBtn">⏬ Collapse All</button>
       <button id="expandAllBtn">⏫ Expand All</button>
