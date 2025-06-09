@@ -1,4 +1,4 @@
-import { BeatTracker } from '../xa-beat-tracker.js';
+import { BeatTracker, quickBeatTrack } from '../xa-beat-tracker.js';
 
 function createOnsetEnvelope(bpm, sr, hop, beats) {
   const framesPerBeat = Math.round((sr / hop) * (60 / bpm));
@@ -35,4 +35,23 @@ test('beatTrack identifies beats for a simple onset envelope', () => {
   expect(result.beats.length).toBe(8);
   expect(result.beats[0]).toBe(0);
   expect(result.beats[1]).toBe(framesPerBeat);
+});
+
+test('quickBeatTrack uses detected tempo instead of fallback', () => {
+  const sr = 22050;
+  const hop = 512;
+  const { onset } = createOnsetEnvelope(100, sr, hop, 8);
+
+  // Patch onsetStrength so quickBeatTrack treats the input as an onset envelope
+  const orig = BeatTracker.prototype.onsetStrength;
+  BeatTracker.prototype.onsetStrength = function(y) { return y; };
+
+  const result = quickBeatTrack(onset, sr);
+
+  // Restore original method
+  BeatTracker.prototype.onsetStrength = orig;
+
+  expect(Math.round(result.bpm)).toBe(100);
+  expect(result.beats.length).toBe(8);
+  expect(result.confidence).toBeGreaterThan(0);
 });
