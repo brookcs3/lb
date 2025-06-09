@@ -8,8 +8,7 @@
     "build": "vite build",
     "preview": "vite preview",
     "deploy": "npm run build && npx gh-pages -d dist",
-    "test": "node --experimental-vm-modules node_modules/jest/bin/jest.js",
-    "pretest": "./setup.sh"
+    "test": "node --experimental-vm-modules node_modules/jest/bin/jest.js"
   },
   "devDependencies": {
     "vite": "^5.0.0",
