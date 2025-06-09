@@ -781,17 +781,22 @@
         const globalOnsetEnvelope = await computeOnsetStrength(y, sr);
         logMessage(`✅ Onset envelope computed: ${globalOnsetEnvelope.length} frames`);
         logMessage(`📈 Onset stats: max=${Math.max(...globalOnsetEnvelope).toFixed(3)}, avg=${(globalOnsetEnvelope.reduce((a,b)=>a+b,0)/globalOnsetEnvelope.length).toFixed(3)}`);
-        logMessage(`🎵 Step 2: Finding global tempo candidates...`);
-        const globalTempo = await estimateGlobalTempo(globalOnsetEnvelope, sr);
-        logMessage(`🎯 Global tempo: ${globalTempo.bpm.toFixed(1)} BPM (confidence: ${(globalTempo.confidence * 100).toFixed(1)}%)`);
-        logMessage(`🔍 Best correlation score: ${globalTempo.score.toFixed(4)}`);
+        logMessage(`🎵 Step 2: Estimating tempo with PLP...`);
+        const plpPulse = tracker.plp({ onsetEnvelope: globalOnsetEnvelope, sr });
+        const plpTempo = tracker.tempoEstimation(plpPulse, sr);
+        logMessage(`🎯 PLP tempo: ${plpTempo.toFixed(1)} BPM`);
+
+        logMessage(`🎵 Step 3: Finding global tempo candidates...`);
+        const acTempo = await estimateGlobalTempo(globalOnsetEnvelope, sr);
+        logMessage(`🎯 Global tempo: ${acTempo.bpm.toFixed(1)} BPM (confidence: ${(acTempo.confidence * 100).toFixed(1)}%)`);
+        logMessage(`🔍 Best correlation score: ${acTempo.score.toFixed(4)}`);
         logMessage(`📊 Top tempo candidates:`);
-        for (let i = 0; i < Math.min(globalTempo.candidates.length, 5); i++) {
-          const candidate = globalTempo.candidates[i];
+        for (let i = 0; i < Math.min(acTempo.candidates.length, 5); i++) {
+          const candidate = acTempo.candidates[i];
           logMessage(` ${i+1}. ${candidate.bpm.toFixed(1)} BPM (score: ${candidate.score.toFixed(4)})`);
         }
 
-        logMessage(`🎵 Step 3: Computing Fourier tempogram for detailed tempo analysis...`);
+        logMessage(`🎵 Step 4: Computing Fourier tempogram for detailed tempo analysis...`);
         const tempogramResult = await computeFourierTempogram(globalOnsetEnvelope, sr);
         logMessage(`📈 Tempogram computed: ${tempogramResult.frames} time frames, ${tempogramResult.frequencies.length} tempo frequencies`);
         logMessage(`🎯 Tempogram tempo range: ${tempogramResult.tempoRange.min.toFixed(1)}-${tempogramResult.tempoRange.max.toFixed(1)} BPM`);
@@ -801,7 +806,10 @@
           logMessage(` ${i+1}. ${peak.bpm.toFixed(1)} BPM (energy: ${peak.energy.toFixed(4)}, frames: ${peak.frameCount})`);
         }
 
-        logMessage(`🎵 Step 4: Analyzing tempo stability over time...`);
+        const tempogramTempo = tempogramResult.peakTempos.length > 0 ? tempogramResult.peakTempos[0].bpm : acTempo.bpm;
+        const finalTempo = (acTempo.bpm + plpTempo + tempogramTempo) / 3;
+
+        logMessage(`🎵 Step 5: Analyzing tempo stability over time...`);
         const windowSamples = Math.floor(windowSize * sr);
         const hopSamples = Math.floor(hopSize * sr);
         const numWindows = Math.floor((y.length - windowSamples) / hopSamples);
@@ -813,15 +821,15 @@
         for (let i = 0; i < numWindows; i++) {
           const start = i * hopSamples;
           const window = y.slice(start, start + windowSamples);
-          const localResult = await estimateConstrainedTempo(window, sr, globalTempo.bpm, i);
+        const localResult = await estimateConstrainedTempo(window, sr, finalTempo, i);
           dynamicTempo.push(localResult.bpm);
           times.push(start / sr);
-          const deviation = Math.abs(localResult.bpm - globalTempo.bpm);
+          const deviation = Math.abs(localResult.bpm - finalTempo);
           const status = deviation < 3 ? "✅" : deviation < 8 ? "⚠️" : "❌";
-          const deviationStr = deviation > 0.1 ? ` (${deviation > 0 ? '+' : ''}${(localResult.bpm - globalTempo.bpm).toFixed(1)})` : '';
+          const deviationStr = deviation > 0.1 ? ` (${deviation > 0 ? '+' : ''}${(localResult.bpm - finalTempo).toFixed(1)})` : '';
           logMessage(`[${i.toString().padStart(2,'0')}] t=${times[i].toFixed(1)}s → ${localResult.bpm.toFixed(1)} BPM${deviationStr} ${status} (corr: ${localResult.correlation.toFixed(3)})`);
           const progress = ((i / numWindows) * 100).toFixed(0);
-          bpmDisplay.textContent = `BPM: ${globalTempo.bpm.toFixed(1)} (${progress}% analyzed)`;
+          bpmDisplay.textContent = `BPM: ${finalTempo.toFixed(1)} (${progress}% analyzed)`;
           if (i % 2 === 0) await new Promise(resolve => setTimeout(resolve, 10));
         }
 
@@ -829,9 +837,9 @@
           success: true,
           times,
           tempo: dynamicTempo,
-          globalTempo: globalTempo.bpm,
-          confidence: globalTempo.confidence,
-          candidates: globalTempo.candidates,
+          globalTempo: finalTempo,
+          confidence: acTempo.confidence,
+          candidates: acTempo.candidates,
           tempogram: tempogramResult,
           onsetEnvelope: globalOnsetEnvelope // Include for reuse
         };
