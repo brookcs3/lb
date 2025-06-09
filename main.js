@@ -102,6 +102,8 @@
         plpBtn.disabled = false;
         collapseAllBtn.disabled = false;
         expandAllBtn.disabled = false;
+        // reset so selecting the same file again fires change
+        fileInput.value = "";
       } catch (error) {
         console.error("File loading error:", error);
         bpmDisplay.textContent = "BPM: Error";
