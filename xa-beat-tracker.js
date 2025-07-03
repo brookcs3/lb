@@ -52,6 +52,53 @@ export class BeatTracker {
   }
 
   /**
+   * Find the start of rhythmic content in audio
+   * @param {Float32Array} onsetEnvelope - Onset strength envelope
+   * @param {number} hopLength - Hop length in samples
+   * @param {number} sr - Sample rate
+   * @returns {Object} {startFrame: number, startTime: number}
+   */
+  _findRhythmStart(onsetEnvelope, hopLength, sr) {
+    // Calculate rolling average to smooth out noise
+    const windowSize = 20 // frames
+    const threshold = 0.1 // relative to max
+    
+    // Find max onset strength for threshold
+    const maxOnset = Math.max(...onsetEnvelope)
+    const onsetThreshold = maxOnset * threshold
+    
+    // Find first consistent rhythmic activity
+    for (let i = windowSize; i < onsetEnvelope.length - windowSize; i++) {
+      let sum = 0
+      for (let j = 0; j < windowSize; j++) {
+        sum += onsetEnvelope[i - j]
+      }
+      const avg = sum / windowSize
+      
+      // Check if we have consistent activity
+      if (avg > onsetThreshold) {
+        // Look for regularity in the next few frames
+        let regularityScore = 0
+        for (let k = 0; k < windowSize / 2; k++) {
+          if (onsetEnvelope[i + k] > onsetThreshold * 0.5) {
+            regularityScore++
+          }
+        }
+        
+        if (regularityScore > windowSize / 4) {
+          return {
+            startFrame: Math.max(0, i - windowSize),
+            startTime: (Math.max(0, i - windowSize) * hopLength) / sr
+          }
+        }
+      }
+    }
+    
+    // If no clear start found, start from beginning
+    return { startFrame: 0, startTime: 0 }
+  }
+
+  /**
    * Main beat tracking function with dynamic programming
    * @param {Object} options - Beat tracking parameters
    * @param {Float32Array} options.y - Audio time series
@@ -64,6 +111,7 @@ export class BeatTracker {
    * @param {number|Float32Array} options.bpm - Optional tempo override
    * @param {string} options.units - Output units ('frames', 'samples', 'time')
    * @param {boolean} options.sparse - Return sparse or dense array (default: true)
+   * @param {boolean} options.quickDetect - Use quick 2-bar detection (default: false)
    * @returns {Object} {tempo: number|Float32Array, beats: Array|Float32Array}
    */
   beatTrack(options = {}) {
@@ -78,6 +126,7 @@ export class BeatTracker {
       bpm = null,
       units = 'time',
       sparse = true,
+      quickDetect = false,
     } = options
 
     // Auto-detect sample rate if not provided
@@ -104,6 +153,31 @@ export class BeatTracker {
           beats: new Float32Array(onset.length).fill(0),
         }
       }
+    }
+
+    // Quick detection mode: analyze just 2 bars from rhythm start
+    if (quickDetect && !bpm) {
+      const rhythmStart = this._findRhythmStart(onset, hopLength, sampleRate)
+      console.log(`🎼 Rhythm starts at ${rhythmStart.startTime.toFixed(2)}s`)
+      
+      // Estimate tempo from a short section first
+      const previewFrames = Math.min(onset.length, rhythmStart.startFrame + 256) // ~3 seconds at 512 hop
+      const previewOnset = onset.slice(rhythmStart.startFrame, previewFrames)
+      const estimatedTempo = this.tempoEstimation(previewOnset, sampleRate, hopLength, startBpm)
+      
+      // Calculate 2 bars duration
+      const beatsPerBar = 4 // assuming 4/4 time
+      const barsToAnalyze = 2
+      const beatsToAnalyze = beatsPerBar * barsToAnalyze
+      const beatDuration = 60.0 / estimatedTempo // seconds per beat
+      const analysisDuration = beatDuration * beatsToAnalyze // total seconds
+      const analysisFrames = Math.ceil((analysisDuration * sampleRate) / hopLength)
+      
+      // Extract 2-bar section for analysis
+      const endFrame = Math.min(onset.length, rhythmStart.startFrame + analysisFrames)
+      onset = onset.slice(rhythmStart.startFrame, endFrame)
+      
+      console.log(`⏱️ Quick detect: analyzing ${analysisDuration.toFixed(1)}s (${beatsToAnalyze} beats at ${estimatedTempo.toFixed(1)} BPM)`)
     }
 
     // Estimate BPM if not provided
@@ -582,8 +656,21 @@ export class BeatTracker {
    * @private
    */
   fourierTempogram(onset, _sr, hopLength, winLength) {
+    // Handle case where onset is shorter than window
+    if (onset.length < winLength) {
+      console.warn(`⚠️ Onset envelope (${onset.length}) shorter than window (${winLength}), skipping tempogram`)
+      return []
+    }
+    
     const hopFrames = Math.floor(winLength / 4)
     const frames = Math.floor((onset.length - winLength) / hopFrames) + 1
+    
+    // Ensure we have at least 1 frame
+    if (frames <= 0) {
+      console.warn(`⚠️ Not enough data for tempogram (would compute ${frames} frames)`)
+      return []
+    }
+    
     const tempogram = []
 
     // Window function (Hann)
@@ -1233,6 +1320,7 @@ export function quickBeatTrack(audioData, sampleRate = null) {
       sr: sampleRate, // Will auto-detect if null
       units: 'time',
       sparse: true,
+      quickDetect: true, // Enable 2-bar quick detection
     })
 
     return {
@@ -1245,6 +1333,29 @@ export function quickBeatTrack(audioData, sampleRate = null) {
     return { bpm: 120, beats: [], confidence: 0 }
   }
 }
+
+/**
+ * Ultra-fast BPM detection using 2-bar analysis
+ * @param {Float32Array} audioData - Audio signal
+ * @param {number} sampleRate - Sample rate
+ * @returns {number} Detected BPM
+ */
+export function quickBPMDetect(audioData, sampleRate = null) {
+  const tracker = new BeatTracker()
+  const sr = sampleRate || tracker._detectSampleRate(audioData)
+  
+  // Get onset envelope
+  const onset = tracker.onsetStrength(audioData, sr, 512)
+  
+  // Find rhythm start
+  const rhythmStart = tracker._findRhythmStart(onset, 512, sr)
+  
+  // Analyze just enough for tempo estimation
+  const previewFrames = Math.min(onset.length, rhythmStart.startFrame + 256)
+  const previewOnset = onset.slice(rhythmStart.startFrame, previewFrames)
+  
+  return tracker.tempoEstimation(previewOnset, sr, 512, 120)
+}
 /**
  * Web Audio API integration helpers
  */
@@ -1255,6 +1366,256 @@ export class BeatTrackingUI {
   }
 
   /**
+   * Detect drum hits (kicks, snares, etc) using onset detection
+   * @param {AudioBuffer} audioBuffer - Audio buffer to analyze
+   * @param {Object} options - Detection options
+   * @returns {Object} Object with kicks and hits arrays
+   */
+  detectDrumHits(audioBuffer, options = {}) {
+    const {
+      threshold = 0.3,      // Sensitivity (0-1, lower = more sensitive)
+      minInterval = 0.05,   // Minimum time between hits (50ms)
+      kickThreshold = 0.4,  // Threshold for kick detection (higher = more selective)
+      circular = true       // Enable circular analysis for better loop detection
+    } = options
+    
+    console.log(`🥁 Detecting drum hits with threshold ${threshold}${circular ? ' (circular mode)' : ''}`)
+    
+    const audioData = audioBuffer.getChannelData(0)
+    const sampleRate = audioBuffer.sampleRate
+    const frameLength = 2048
+    const hopLength = 512
+    
+    // Compute onset strength with circular option for seamless loop detection
+    const onsetStrength = circular 
+      ? this._computeCircularOnsetStrength(audioData, sampleRate, hopLength, frameLength)
+      : this.tracker.onsetStrength(audioData, sampleRate, hopLength)
+    
+    // Find peaks in onset strength
+    const kicks = []
+    const hits = []
+    const maxStrength = Math.max(...onsetStrength)
+    const adaptiveThreshold = maxStrength * threshold
+    
+    let lastPeakTime = -minInterval
+    
+    for (let i = 1; i < onsetStrength.length - 1; i++) {
+      const currentTime = (i * hopLength) / sampleRate
+      
+      // Check if it's a local peak above threshold
+      if (onsetStrength[i] > adaptiveThreshold &&
+          onsetStrength[i] > onsetStrength[i - 1] &&
+          onsetStrength[i] > onsetStrength[i + 1] &&
+          currentTime - lastPeakTime >= minInterval) {
+        
+        const frameStart = i * hopLength
+        const frameEnd = Math.min(frameStart + frameLength, audioData.length)
+        const frame = audioData.slice(frameStart, frameEnd)
+        
+        // Analyze frequency content
+        const freqAnalysis = this._analyzeFrequencyContent(frame)
+        
+        // Classify as kick or other hit based on frequency content
+        if (freqAnalysis.lowFreqRatio > kickThreshold) {
+          kicks.push(currentTime)
+          console.log(`🦵 Kick at ${currentTime.toFixed(3)}s (low freq: ${(freqAnalysis.lowFreqRatio*100).toFixed(1)}%)`)
+        } else {
+          hits.push(currentTime)
+          console.log(`🥁 Hit at ${currentTime.toFixed(3)}s (low freq: ${(freqAnalysis.lowFreqRatio*100).toFixed(1)}%)`)
+        }
+        
+        lastPeakTime = currentTime
+      }
+    }
+    
+    console.log(`🥁 Found ${kicks.length} kicks and ${hits.length} other hits`)
+    
+    return { kicks, hits }
+  }
+  
+  /**
+   * Compute onset strength with circular buffer for seamless loop detection
+   * @private
+   */
+  _computeCircularOnsetStrength(audioData, sampleRate, hopLength, frameLength) {
+    const frames = Math.floor((audioData.length - frameLength) / hopLength) + 1
+    const onset = new Float32Array(frames)
+    
+    console.log(`🔄 Computing circular onset strength for ${frames} frames`)
+    
+    // Pre-compute spectrum for the last few frames to use as "previous" for frame 0
+    const preRollFrames = 4 // Use last 4 frames as pre-roll
+    let prevSpectrums = []
+    
+    // Compute spectrums for the end of the track
+    for (let i = frames - preRollFrames; i < frames; i++) {
+      if (i < 0) continue
+      const start = i * hopLength
+      const frame = new Float32Array(frameLength)
+      
+      // Apply window
+      for (let j = 0; j < frameLength && start + j < audioData.length; j++) {
+        const windowValue = 0.5 * (1 - Math.cos((2 * Math.PI * j) / (frameLength - 1)))
+        frame[j] = audioData[start + j] * windowValue
+      }
+      
+      const spectrum = this.tracker._computeMagnitudeSpectrum(frame)
+      prevSpectrums.push(spectrum)
+    }
+    
+    // Use the last spectrum as previous for frame 0
+    let prevSpectrum = prevSpectrums.length > 0 ? prevSpectrums[prevSpectrums.length - 1] : null
+    
+    // Compute onset strength for all frames
+    for (let i = 0; i < frames; i++) {
+      const start = i * hopLength
+      const frame = new Float32Array(frameLength)
+      
+      // Apply window
+      for (let j = 0; j < frameLength && start + j < audioData.length; j++) {
+        const windowValue = 0.5 * (1 - Math.cos((2 * Math.PI * j) / (frameLength - 1)))
+        frame[j] = audioData[start + j] * windowValue
+      }
+      
+      // Compute magnitude spectrum
+      const spectrum = this.tracker._computeMagnitudeSpectrum(frame)
+      
+      if (prevSpectrum) {
+        // Spectral flux: sum of positive differences
+        let flux = 0
+        for (let k = 0; k < Math.min(spectrum.length, prevSpectrum.length); k++) {
+          flux += Math.max(0, spectrum[k] - prevSpectrum[k])
+        }
+        onset[i] = flux
+        
+        if (i === 0) {
+          console.log(`🔄 Frame 0 flux: ${flux.toFixed(3)} (using end-of-track spectrum as previous)`)
+        }
+      } else {
+        onset[i] = 0
+      }
+      
+      prevSpectrum = spectrum
+    }
+    
+    return onset
+  }
+  
+  /**
+   * Analyze frequency content of a frame
+   * @private
+   */
+  _analyzeFrequencyContent(frame) {
+    // Simple FFT to analyze frequency content
+    const fft = this.tracker._fft(frame)
+    
+    // Calculate energy in different frequency bands
+    const binCount = fft.length
+    const lowBandEnd = Math.floor(binCount * 0.1)  // ~200Hz for 48kHz
+    const midBandEnd = Math.floor(binCount * 0.3)  // ~600Hz
+    
+    let lowEnergy = 0
+    let midEnergy = 0
+    let highEnergy = 0
+    
+    for (let i = 0; i < binCount; i++) {
+      const magnitude = Math.sqrt(fft[i].real * fft[i].real + fft[i].imag * fft[i].imag)
+      
+      if (i < lowBandEnd) {
+        lowEnergy += magnitude
+      } else if (i < midBandEnd) {
+        midEnergy += magnitude
+      } else {
+        highEnergy += magnitude
+      }
+    }
+    
+    const totalEnergy = lowEnergy + midEnergy + highEnergy
+    
+    return {
+      lowFreqRatio: totalEnergy > 0 ? lowEnergy / totalEnergy : 0,
+      midFreqRatio: totalEnergy > 0 ? midEnergy / totalEnergy : 0,
+      highFreqRatio: totalEnergy > 0 ? highEnergy / totalEnergy : 0
+    }
+  }
+  
+  /**
+   * Generate combined click track for kicks and hits with different pitches
+   * @param {Object} drumHits - Object with kicks and hits arrays
+   * @param {number} duration - Total duration
+   * @param {number} kickFreq - Kick click frequency in Hz (default: 200Hz - low thump)
+   * @param {number} hitFreq - Hit click frequency in Hz (default: 1000Hz - higher snap)
+   * @param {number} offset - Beat offset in seconds
+   * @returns {AudioBuffer} Combined click track buffer
+   */
+  generateDrumClickTrack(drumHits, duration, kickFreq = 200, hitFreq = 1000, offset = 0) {
+    if (!this.audioContext) return null
+    
+    const { kicks = [], hits = [] } = drumHits
+    
+    console.log(`🔊 Generating drum click track: ${kicks.length} kicks (${kickFreq}Hz), ${hits.length} hits (${hitFreq}Hz)`)
+    
+    const sampleRate = this.audioContext.sampleRate
+    const samples = Math.floor(duration * sampleRate)
+    const clickBuffer = this.audioContext.createBuffer(1, samples, sampleRate)
+    const channelData = clickBuffer.getChannelData(0)
+    
+    // Generate kicks (low frequency, longer duration)
+    kicks.forEach((kickTime, index) => {
+      const adjustedTime = kickTime + offset
+      const startSample = Math.floor(adjustedTime * sampleRate)
+      
+      if (startSample < 0 || startSample >= samples) return
+      
+      if (index < 3) {
+        console.log(`  🦵 Adding kick ${index} at ${adjustedTime.toFixed(3)}s`)
+      }
+      
+      // Longer click for kicks (150ms)
+      const clickDuration = 0.15
+      const clickSamples = Math.floor(clickDuration * sampleRate)
+      
+      for (let i = 0; i < clickSamples && startSample + i < samples; i++) {
+        const t = i / sampleRate
+        // Stronger exponential decay for punchy kick
+        const envelope = Math.exp(-20 * t)
+        const signal = Math.sin(2 * Math.PI * kickFreq * t)
+        // Higher amplitude for kicks
+        channelData[startSample + i] += envelope * signal * 0.9
+      }
+    })
+    
+    // Generate hits (higher frequency, shorter duration)
+    hits.forEach((hitTime, index) => {
+      const adjustedTime = hitTime + offset
+      const startSample = Math.floor(adjustedTime * sampleRate)
+      
+      if (startSample < 0 || startSample >= samples) return
+      
+      if (index < 3) {
+        console.log(`  🥁 Adding hit ${index} at ${adjustedTime.toFixed(3)}s`)
+      }
+      
+      // Shorter click for snares/hats (80ms)
+      const clickDuration = 0.08
+      const clickSamples = Math.floor(clickDuration * sampleRate)
+      
+      for (let i = 0; i < clickSamples && startSample + i < samples; i++) {
+        const t = i / sampleRate
+        // Faster decay for snappy hits
+        const envelope = Math.exp(-40 * t)
+        const signal = Math.sin(2 * Math.PI * hitFreq * t)
+        // Slightly lower amplitude for hits
+        channelData[startSample + i] += envelope * signal * 0.7
+      }
+    })
+    
+    console.log(`✅ Generated combined drum click track`)
+    
+    return clickBuffer
+  }
+  
+  /**
    * Generate click track from beat times
    * @param {Array} beats - Beat times in seconds
    * @param {number} duration - Total duration
@@ -1262,31 +1623,68 @@ export class BeatTrackingUI {
    * @param {number} offset - Beat offset in seconds
    * @returns {AudioBuffer} Click track buffer
    */
-  generateClickTrack(beats, duration, clickFreq = 880, offset = 0) {
+  generateClickTrack(beats, duration, clickFreq = 660, offset = 0) {
     if (!this.audioContext) return null
 
+    console.log(`🔊 Generating click track: ${beats.length} beats, ${duration.toFixed(2)}s duration, ${clickFreq}Hz`)
+    
     const sampleRate = this.audioContext.sampleRate
     const samples = Math.floor(duration * sampleRate)
     const clickBuffer = this.audioContext.createBuffer(1, samples, sampleRate)
     const channelData = clickBuffer.getChannelData(0)
 
-    beats.forEach((beatTime) => {
+    // Check if we have any beats
+    if (!beats || beats.length === 0) {
+      console.warn('⚠️ No beats provided for click track generation')
+      return clickBuffer
+    }
+
+    let clicksAdded = 0
+    beats.forEach((beatTime, index) => {
       // Apply offset to beat time
       const adjustedBeatTime = beatTime + offset
       const startSample = Math.floor(adjustedBeatTime * sampleRate)
       
-      if (startSample < 0 || startSample >= samples) return // Skip beats outside buffer
+      if (startSample < 0 || startSample >= samples) {
+        console.log(`  Skipping beat ${index} at ${adjustedBeatTime.toFixed(3)}s (outside buffer)`)
+        return // Skip beats outside buffer
+      }
       
-      const clickDuration = 0.05 // 50ms click (shorter for clarity)
+      if (index < 5 || index === beats.length - 1) { // Log first 5 and last beat
+        console.log(`  Adding click ${index} at ${adjustedBeatTime.toFixed(3)}s (sample ${startSample})`)
+      }
+      
+      // Match librosa: 0.25s click duration
+      const clickDuration = 0.25
       const clickSamples = Math.floor(clickDuration * sampleRate)
 
+      // Track max amplitude for debugging
+      let maxAmp = 0
+      
       for (let i = 0; i < clickSamples && startSample + i < samples; i++) {
         const t = i / sampleRate
-        const envelope = Math.exp(-t * 35) // Faster decay for sharper click
-        channelData[startSample + i] =
-            0.4 * envelope * Math.sin(2 * Math.PI * clickFreq * t)
+        
+        // Simple exponential decay envelope (like librosa)
+        const envelope = Math.exp(-35 * t)
+        
+        // Use 660Hz like librosa (lower frequency, more audible)
+        const signal = Math.sin(2 * Math.PI * clickFreq * t)
+        
+        // Higher amplitude for better audibility
+        const amplitude = envelope * signal * 0.8
+        channelData[startSample + i] += amplitude
+        
+        maxAmp = Math.max(maxAmp, Math.abs(amplitude))
       }
+      
+      if (index < 5) {
+        console.log(`    Click ${index} max amplitude: ${maxAmp.toFixed(3)}`)
+      }
+      
+      clicksAdded++
     })
+    
+    console.log(`✅ Added ${clicksAdded} clicks to buffer`)
 
     return clickBuffer
   }

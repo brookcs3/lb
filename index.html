@@ -13,6 +13,9 @@
     const stopBtn = document.getElementById("stopBtn");
     const analyzeBtn = document.getElementById("analyzeBtn");
     const clickBtn = document.getElementById("clickBtn");
+    const drumBtn = document.getElementById("drumBtn");
+    const kickBtn = document.getElementById("kickBtn");
+    const hitBtn = document.getElementById("hitBtn");
     const beatOffsetSlider = document.getElementById("beatOffset");
     const offsetDisplay = document.getElementById("offsetDisplay");
     const resetOffsetBtn = document.getElementById("resetOffset");
@@ -34,6 +37,13 @@
     let clickBuffer = null; // Store the generated click track
     let clickSourceNode = null; // Click track audio source
     let clickEnabled = false; // Toggle for click track
+    let drumMode = false; // Toggle for drum hit mode
+    let kickMode = false; // Toggle for kick only mode
+    let hitMode = false; // Toggle for hit only mode
+    let drumHitData = null; // Store drum hit data (kicks and hits)
+    let drumClickBuffer = null; // Store combined drum click track
+    let kickClickBuffer = null; // Store kick only click track
+    let hitClickBuffer = null; // Store hit only click track
     let clickPulseInterval = null; // Interval for button pulsing
     let beatOffset = 0; // Manual beat timing offset in seconds
     const tracker = new BeatTracker();
@@ -79,6 +89,19 @@
         logMessage("✅ Audio file loaded successfully");
         logMessage(`Duration: ${audioBuffer.duration.toFixed(1)}s, Sample Rate: ${audioBuffer.sampleRate}Hz`);
         logMessage(`AudioContext Sample Rate: ${audioContext.sampleRate}Hz`);
+        
+        // Reset drum detection for new file
+        drumHitData = null;
+        drumClickBuffer = null;
+        kickClickBuffer = null;
+        hitClickBuffer = null;
+        drumMode = false;
+        kickMode = false;
+        hitMode = false;
+        drumBtn.textContent = "🥁 All Drums";
+        kickBtn.textContent = "🦵 Kicks Only";
+        hitBtn.textContent = "🥨 Hits Only";
+        
         playBtn.disabled = false;
         analyzeBtn.disabled = false;
         collapseAllBtn.disabled = false;
@@ -108,10 +131,37 @@
         // Set up live audio analysis
         setupLiveAnalysis();
         
+        // If no analysis has been done, run it in the background
+        if (!beatTimes || beatTimes.length === 0) {
+          logMessage("🎵 Starting background beat analysis...");
+          // Run analysis asynchronously to avoid blocking
+          setTimeout(() => {
+            analyzeBtn.onclick();
+          }, 100);
+        }
+        
         // Start click track if enabled
         if (clickEnabled && clickBuffer) {
           clickSourceNode = audioContext.createBufferSource();
           clickSourceNode.buffer = clickBuffer;
+          clickSourceNode.loop = true;
+          clickSourceNode.connect(audioContext.destination);
+        } else if (drumMode && drumClickBuffer) {
+          // Use combined drum click track
+          clickSourceNode = audioContext.createBufferSource();
+          clickSourceNode.buffer = drumClickBuffer;
+          clickSourceNode.loop = true;
+          clickSourceNode.connect(audioContext.destination);
+        } else if (kickMode && kickClickBuffer) {
+          // Use kick only click track
+          clickSourceNode = audioContext.createBufferSource();
+          clickSourceNode.buffer = kickClickBuffer;
+          clickSourceNode.loop = true;
+          clickSourceNode.connect(audioContext.destination);
+        } else if (hitMode && hitClickBuffer) {
+          // Use hit only click track
+          clickSourceNode = audioContext.createBufferSource();
+          clickSourceNode.buffer = hitClickBuffer;
           clickSourceNode.loop = true;
           clickSourceNode.connect(audioContext.destination);
         }
@@ -120,7 +170,12 @@
         sourceNode.start();
         if (clickSourceNode) {
           clickSourceNode.start();
-          logMessage("▶️ Audio playback started with click track");
+          let clickType = "clicks";
+          if (clickEnabled) clickType = "click track";
+          else if (drumMode) clickType = "all drums";
+          else if (kickMode) clickType = "kicks only";
+          else if (hitMode) clickType = "hits only";
+          logMessage(`▶️ Audio playback started with ${clickType}`);
           startClickPulse(); // Start button pulsing
         } else {
           logMessage("▶️ Audio playback started");
@@ -205,12 +260,14 @@
           logMessage(` Total spectral energy: ${tempogram.totalEnergy.toFixed(3)}`);
           logMessage(` Energy distribution:`);
 
-          if (tempogram.peakTempos.length > 0) {
+          if (tempogram && tempogram.peakTempos && tempogram.peakTempos.length > 0) {
             logMessage(`🎼 TEMPOGRAM PEAK TEMPOS (spectral analysis):`);
             for (let i = 0; i < Math.min(tempogram.peakTempos.length, 8); i++) {
               const peak = tempogram.peakTempos[i];
               const globalMatch = Math.abs(peak.bpm - globalTempo) < 5 ? "🎯" : "";
-              logMessage(` ${i+1}. ${peak.bpm.toFixed(1)} BPM (energy: ${peak.energy.toFixed(4)}, frames: ${peak.frameCount}/${tempogram.frames} frames, ${(peak.prominence*100).toFixed(1)}%) ${globalMatch}`);
+              const frameCount = peak.frameCount || 0;
+              const frames = tempogram.frames || 1;
+              logMessage(` ${i+1}. ${peak.bpm.toFixed(1)} BPM (energy: ${peak.energy.toFixed(4)}, frames: ${frameCount}/${frames} frames, ${(peak.prominence*100).toFixed(1)}%) ${globalMatch}`);
             }
 
             const tempogramTop = tempogram.peakTempos[0];
@@ -256,13 +313,13 @@
           logMessage(`🥁 Beat tracking completed: ${beatTimes.length} beats detected`);
 
           logMessage(`🎵 Generating click track for verification...`);
-          clickBuffer = ui.generateClickTrack(beatTimes, audioBuffer.duration);
-          logMessage(`✅ Click track generated successfully`);
+          clickBuffer = ui.generateClickTrack(beatTimes, audioBuffer.duration, 660, beatOffset);
+          logMessage(`✅ Click track generated successfully with ${beatTimes.length} clicks`);
           clickBtn.disabled = false; // Enable click track button
 
           // Better status labeling
           let displayStatus;
-          const tempogramConfirmed = tempogram.peakTempos.length > 0 && Math.abs(tempogram.peakTempos[0].bpm - globalTempo) < 10;
+          const tempogramConfirmed = tempogram && tempogram.peakTempos && tempogram.peakTempos.length > 0 && Math.abs(tempogram.peakTempos[0].bpm - globalTempo) < 10;
           
           if (confidence > 0.4) {
             displayStatus = "DETECTED";
@@ -290,7 +347,7 @@
           const stabilityStatus = avgDeviation < 5 ? "STABLE" : avgDeviation < 15 ? "MODERATE" : "VARIABLE";
           logMessage(`   📊 Overall stability: ${stabilityStatus} (±${avgDeviation.toFixed(1)} BPM average)`);
 
-          if (tempogram.peakTempos.length > 1) {
+          if (tempogram && tempogram.peakTempos && tempogram.peakTempos.length > 1) {
             logMessage(`   🎼 Multiple tempo candidates detected - possible tempo changes or polyrhythm`);
           }
         } else {
@@ -309,7 +366,14 @@
     // Click track toggle handler
     clickBtn.onclick = () => {
       clickEnabled = !clickEnabled;
+      // Disable all drum modes when enabling regular click
+      drumMode = false;
+      kickMode = false; 
+      hitMode = false;
       clickBtn.textContent = clickEnabled ? "🔊 Click Track" : "🔇 Click Track";
+      drumBtn.textContent = "🥁 All Drums";
+      kickBtn.textContent = "🦵 Kicks Only";
+      hitBtn.textContent = "🥨 Hits Only";
       
       if (sourceNode && audioContext) {
         // If playing, restart playback with/without click
@@ -317,6 +381,185 @@
       }
       
       logMessage(`🎵 Click track ${clickEnabled ? 'enabled' : 'disabled'}`);
+    };
+
+    // Drum hit mode toggle handler
+    drumBtn.onclick = async () => {
+      if (!audioBuffer) {
+        logMessage("❌ No audio loaded for drum detection");
+        return;
+      }
+      
+      drumMode = !drumMode;
+      // Disable other modes
+      clickEnabled = false;
+      kickMode = false;
+      hitMode = false;
+      // Update button states
+      clickBtn.textContent = "🔇 Click Track";
+      drumBtn.textContent = drumMode ? "🔊 All Drums" : "🥁 All Drums";
+      kickBtn.textContent = "🦵 Kicks Only";
+      hitBtn.textContent = "🥨 Hits Only";
+      
+      if (drumMode && !drumHitData) {
+        // Detect drum hits if not already done
+        logMessage("🥁 Detecting all drum hits...");
+        drumBtn.disabled = true;
+        kickBtn.disabled = true;
+        hitBtn.disabled = true;
+        
+        try {
+          drumHitData = ui.detectDrumHits(audioBuffer, {
+            threshold: 0.3,    // Adjust sensitivity
+            minInterval: 0.05, // 50ms minimum between hits
+            kickThreshold: 0.4 // Threshold for kick detection
+          });
+          
+          logMessage(`✅ Found ${drumHitData.kicks.length} kicks and ${drumHitData.hits.length} other hits`);
+          
+          // Generate all click track buffers
+          drumClickBuffer = ui.generateDrumClickTrack(drumHitData, audioBuffer.duration, 200, 1000, beatOffset);
+          kickClickBuffer = ui.generateDrumClickTrack({kicks: drumHitData.kicks, hits: []}, audioBuffer.duration, 200, 1000, beatOffset);
+          hitClickBuffer = ui.generateDrumClickTrack({kicks: [], hits: drumHitData.hits}, audioBuffer.duration, 200, 1000, beatOffset);
+          
+          logMessage(`🔊 Generated all drum click tracks`);
+          
+        } catch (error) {
+          console.error("Drum detection error:", error);
+          logMessage("❌ Drum detection failed: " + error.message);
+          drumMode = false;
+          drumBtn.textContent = "🥁 All Drums";
+        } finally {
+          drumBtn.disabled = false;
+          kickBtn.disabled = false;
+          hitBtn.disabled = false;
+        }
+      }
+      
+      if (sourceNode && audioContext) {
+        // If playing, restart playback with/without drum clicks
+        restartPlaybackWithClick();
+      }
+      
+      logMessage(`🥁 Drum hit mode ${drumMode ? 'enabled' : 'disabled'}`);
+    };
+
+    // Kick only mode toggle handler
+    kickBtn.onclick = async () => {
+      if (!audioBuffer) {
+        logMessage("❌ No audio loaded for kick detection");
+        return;
+      }
+      
+      kickMode = !kickMode;
+      // Disable other modes
+      clickEnabled = false;
+      drumMode = false;
+      hitMode = false;
+      // Update button states
+      clickBtn.textContent = "🔇 Click Track";
+      drumBtn.textContent = "🥁 All Drums";
+      kickBtn.textContent = kickMode ? "🔊 Kicks Only" : "🦵 Kicks Only";
+      hitBtn.textContent = "🥨 Hits Only";
+      
+      // Detect drums if not already done
+      if (kickMode && !drumHitData) {
+        logMessage("🦵 Detecting drum hits for kick isolation...");
+        kickBtn.disabled = true;
+        drumBtn.disabled = true;
+        hitBtn.disabled = true;
+        
+        try {
+          drumHitData = ui.detectDrumHits(audioBuffer, {
+            threshold: 0.3,
+            minInterval: 0.05,
+            kickThreshold: 0.4
+          });
+          
+          logMessage(`✅ Found ${drumHitData.kicks.length} kicks and ${drumHitData.hits.length} other hits`);
+          
+          // Generate click track buffers if needed
+          if (!kickClickBuffer) {
+            kickClickBuffer = ui.generateDrumClickTrack({kicks: drumHitData.kicks, hits: []}, audioBuffer.duration, 200, 1000, beatOffset);
+            logMessage(`🔊 Generated kick click track`);
+          }
+          
+        } catch (error) {
+          console.error("Kick detection error:", error);
+          logMessage("❌ Kick detection failed: " + error.message);
+          kickMode = false;
+          kickBtn.textContent = "🦵 Kicks Only";
+        } finally {
+          kickBtn.disabled = false;
+          drumBtn.disabled = false;
+          hitBtn.disabled = false;
+        }
+      }
+      
+      if (sourceNode && audioContext) {
+        restartPlaybackWithClick();
+      }
+      
+      logMessage(`🦵 Kick only mode ${kickMode ? 'enabled' : 'disabled'} (${drumHitData?.kicks.length || 0} kicks)`);
+    };
+
+    // Hit only mode toggle handler
+    hitBtn.onclick = async () => {
+      if (!audioBuffer) {
+        logMessage("❌ No audio loaded for hit detection");
+        return;
+      }
+      
+      hitMode = !hitMode;
+      // Disable other modes
+      clickEnabled = false;
+      drumMode = false;
+      kickMode = false;
+      // Update button states
+      clickBtn.textContent = "🔇 Click Track";
+      drumBtn.textContent = "🥁 All Drums";
+      kickBtn.textContent = "🦵 Kicks Only";
+      hitBtn.textContent = hitMode ? "🔊 Hits Only" : "🥨 Hits Only";
+      
+      // Detect drums if not already done
+      if (hitMode && !drumHitData) {
+        logMessage("🥨 Detecting drum hits for snare/hat isolation...");
+        hitBtn.disabled = true;
+        drumBtn.disabled = true;
+        kickBtn.disabled = true;
+        
+        try {
+          drumHitData = ui.detectDrumHits(audioBuffer, {
+            threshold: 0.3,
+            minInterval: 0.05,
+            kickThreshold: 0.4
+          });
+          
+          logMessage(`✅ Found ${drumHitData.kicks.length} kicks and ${drumHitData.hits.length} other hits`);
+          
+          // Generate click track buffers if needed
+          if (!hitClickBuffer) {
+            hitClickBuffer = ui.generateDrumClickTrack({kicks: [], hits: drumHitData.hits}, audioBuffer.duration, 200, 1000, beatOffset);
+            logMessage(`🔊 Generated hit click track`);
+          }
+          
+        } catch (error) {
+          console.error("Hit detection error:", error);
+          logMessage("❌ Hit detection failed: " + error.message);
+          hitMode = false;
+          hitBtn.textContent = "🥨 Hits Only";
+        } finally {
+          hitBtn.disabled = false;
+          drumBtn.disabled = false;
+          kickBtn.disabled = false;
+        }
+      }
+      
+      if (sourceNode && audioContext) {
+        restartPlaybackWithClick();
+      }
+      
+      logMessage(`🥨 Hit only mode ${hitMode ? 'enabled' : 'disabled'} (${drumHitData?.hits.length || 0} hits)`);
     };
 
     // Beat offset slider handler
@@ -365,6 +608,24 @@
           clickSourceNode.buffer = clickBuffer;
           clickSourceNode.loop = true;
           clickSourceNode.connect(audioContext.destination);
+        } else if (drumMode && drumClickBuffer) {
+          // Use combined drum click track
+          clickSourceNode = audioContext.createBufferSource();
+          clickSourceNode.buffer = drumClickBuffer;
+          clickSourceNode.loop = true;
+          clickSourceNode.connect(audioContext.destination);
+        } else if (kickMode && kickClickBuffer) {
+          // Use kick only click track
+          clickSourceNode = audioContext.createBufferSource();
+          clickSourceNode.buffer = kickClickBuffer;
+          clickSourceNode.loop = true;
+          clickSourceNode.connect(audioContext.destination);
+        } else if (hitMode && hitClickBuffer) {
+          // Use hit only click track
+          clickSourceNode = audioContext.createBufferSource();
+          clickSourceNode.buffer = hitClickBuffer;
+          clickSourceNode.loop = true;
+          clickSourceNode.connect(audioContext.destination);
         }
         
         startTime = audioContext.currentTime - currentTime; // Maintain position
@@ -376,7 +637,8 @@
           stopClickPulse(); // Stop pulsing if disabled
         }
         
-        logMessage(`🔄 Playback restarted ${clickEnabled ? 'with' : 'without'} click track`);
+        const clickType = clickEnabled ? 'click track' : (drumMode ? 'drum hits' : 'no clicks');
+        logMessage(`🔄 Playback restarted with ${clickType}`);
       } catch (error) {
         console.error("Restart playback error:", error);
         stopBtn.onclick(); // Fall back to stop
@@ -414,35 +676,13 @@
       const analysisInterval = 1.5; // Analyze every 1.5 seconds
       const windowSize = 2.0; // Use 2-second windows
       
-      // If no analysis has been run, do a quick analysis first
+      // If no analysis has been run, skip the quick analysis to prevent freezing
       if (!beatTimes || beatTimes.length === 0) {
-        logMessage("🎵 Running quick beat analysis for live tracking...");
-        const y = audioBuffer.getChannelData(0);
-        const sr = audioBuffer.sampleRate;
-        
-        // Quick beat tracking
-        const quickResult = tracker.beatTrack({
-          y: y,
-          sr: sr,
-          units: 'time',
-          sparse: true
-        });
-        
-        beatTimes = quickResult.beats;
-        // Ensure globalTempo is a number, not an object
-        globalTempo = typeof quickResult.tempo === 'object' ? quickResult.tempo.bpm || quickResult.tempo : quickResult.tempo;
-        logMessage(`🎯 Quick analysis: ${globalTempo.toFixed(1)} BPM, ${beatTimes.length} beats`);
-        
-        // Generate click track for the detected beats
-        logMessage(`🎵 Generating click track...`);
-        clickBuffer = ui.generateClickTrack(beatTimes, audioBuffer.duration, 880, beatOffset);
-        if (clickBuffer) {
-          logMessage(`✅ Click track generated with ${beatTimes.length} clicks`);
-          clickBtn.disabled = false;
-        }
-        
-        // Update display
-        bpmDisplay.textContent = `BPM: ${globalTempo.toFixed(1)} (DETECTED)`;
+        logMessage("⚠️ No beat analysis available - please run analysis first");
+        // Set a default tempo to prevent errors
+        globalTempo = 120;
+        beatTimes = [];
+        bpmDisplay.textContent = `BPM: -- (No analysis)`;
       }
       
       bpmInterval = setInterval(async () => {
@@ -524,8 +764,8 @@
 
     // Quick onset strength for live analysis (optimized)
     async function computeQuickOnsetStrength(y, sr) {
-      const frameLength = 1024; // Smaller for speed
-      const hopLength = 256;
+      const frameLength = 2048; // Same as main analysis
+      const hopLength = 512; // Same as main analysis for consistency
       const frames = Math.floor((y.length - frameLength) / hopLength) + 1;
       const onset = new Float32Array(frames);
       
@@ -579,18 +819,24 @@
 
     // Constrained tempo estimation for live analysis
     async function estimateConstrainedTempoLive(onsetEnvelope, sr, globalBpm, minBpm, maxBpm) {
-      const hopLength = 256;
+      // Use same hop length as main analysis for consistency
+      const hopLength = 512;
       const minLag = Math.floor((60 * sr) / (maxBpm * hopLength));
       const maxLag = Math.floor((60 * sr) / (minBpm * hopLength));
+      
+      // If onset envelope is too short, just return global tempo
+      if (onsetEnvelope.length < maxLag * 2) {
+        return globalBpm;
+      }
       
       let bestBpm = globalBpm;
       let maxCorr = 0;
       
       // Quick autocorrelation in constrained range
-      for (let lag = minLag; lag < Math.min(maxLag, onsetEnvelope.length / 2); lag += 2) { // Skip every other for speed
+      for (let lag = minLag; lag < Math.min(maxLag, onsetEnvelope.length / 2); lag++) {
         let corr = 0, norm = 0;
         
-        for (let i = 0; i < onsetEnvelope.length - lag; i += 2) { // Decimated
+        for (let i = 0; i < onsetEnvelope.length - lag; i++) {
           corr += onsetEnvelope[i] * onsetEnvelope[i + lag];
           norm += onsetEnvelope[i] * onsetEnvelope[i];
         }
@@ -604,11 +850,16 @@
         }
       }
       
+      // Only accept new tempo if correlation is strong enough
+      if (maxCorr < 0.2) {
+        return globalBpm; // Stick with global tempo if correlation is weak
+      }
+      
       // Weight towards global tempo (stability bias)
       const deviation = Math.abs(bestBpm - globalBpm);
-      if (deviation > 10 && maxCorr < 0.3) {
-        // If correlation is weak and deviation is large, stick closer to global
-        bestBpm = globalBpm + (bestBpm - globalBpm) * 0.3;
+      if (deviation > 5) {
+        // Smooth large deviations
+        bestBpm = globalBpm + (bestBpm - globalBpm) * 0.5;
       }
       
       return bestBpm;
@@ -896,6 +1147,18 @@
     }
 
     function analyzeTempogram(tempogram, tempoFreqs) {
+      // Handle empty tempogram
+      if (!tempogram || tempogram.length === 0) {
+        console.warn("⚠️ Empty tempogram, skipping analysis");
+        return {
+          peakTempos: [],
+          totalEnergy: 0,
+          peakEnergyRatio: 0,
+          energyDistribution: { totalEnergy: 0, peakEnergy: 0, peakRatio: 0, numPeaks: 0 },
+          magnitudes: []
+        };
+      }
+      
       const numFrames = tempogram.length;
       const numFreqs = tempogram[0].length;
       const magnitudes = [];
@@ -1160,6 +1423,33 @@
     #clickBtn:disabled {
       background: #ccc;
     }
+    #drumBtn {
+      background: #fd7e14;
+    }
+    #drumBtn:hover:not(:disabled) {
+      background: #e8590c;
+    }
+    #drumBtn:disabled {
+      background: #ccc;
+    }
+    #kickBtn {
+      background: #6f42c1;
+    }
+    #kickBtn:hover:not(:disabled) {
+      background: #5a32a3;
+    }
+    #kickBtn:disabled {
+      background: #ccc;
+    }
+    #hitBtn {
+      background: #e83e8c;
+    }
+    #hitBtn:hover:not(:disabled) {
+      background: #d91a72;
+    }
+    #hitBtn:disabled {
+      background: #ccc;
+    }
     .pulse-glow {
       box-shadow: 0 0 20px #00ff88, 0 0 30px #00ff88, 0 0 40px #00ff88;
       background: #28a745 !important;
@@ -1269,6 +1559,9 @@
       <button id="stopBtn">⏹️ Stop</button>
       <button id="analyzeBtn">🔍 Analyze BPM</button>
       <button id="clickBtn">🔇 Click Track</button>
+      <button id="drumBtn">🥁 All Drums</button>
+      <button id="kickBtn">🦵 Kicks Only</button>
+      <button id="hitBtn">🥨 Hits Only</button>
       <button id="collapseAllBtn">⏬ Collapse All</button>
       <button id="expandAllBtn">⏫ Expand All</button>
     </div>

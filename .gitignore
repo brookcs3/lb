@@ -1,3 +1,6 @@
 .aider*
 /node_modules
 .DS_Store
+/claude-gemini-bridge
+/plot_dynamic_beat
+/librosa-main
