@@ -1,370 +1,74 @@
- Starting BPM analysis
-[5:19:18 PM] Audio: 1,308,160 samples (27.3s)
-[5:19:18 PM] Window: 4s, Hop: 1s
-[5:19:18 PM] 🎵 Step 1: Computing onset strength for entire track...
-[5:19:18 PM] 📊 Track info: 1,308,160 samples, 27.3s duration
-[5:19:18 PM] 🔧 Onset computation: 2552 frames, 2048 frame size, 512 hop
-[5:19:18 PM]  Computing onsets... 0% (frame 0/2552, flux: 0.000)
-[5:19:19 PM]  Computing onsets... 8% (frame 200/2552, flux: 110.250)
-[5:19:20 PM]  Computing onsets... 16% (frame 400/2552, flux: 1075.193)
-[5:19:20 PM]  Computing onsets... 24% (frame 600/2552, flux: 213.706)
-[5:19:21 PM]  Computing onsets... 31% (frame 800/2552, flux: 172.190)
-[5:19:22 PM]  Computing onsets... 39% (frame 1000/2552, flux: 402.763)
-[5:19:22 PM]  Computing onsets... 47% (frame 1200/2552, flux: 979.674)
-[5:19:23 PM]  Computing onsets... 55% (frame 1400/2552, flux: 163.562)
-[5:19:24 PM]  Computing onsets... 63% (frame 1600/2552, flux: 162.350)
-[5:19:24 PM]  Computing onsets... 71% (frame 1800/2552, flux: 140.445)
-[5:19:25 PM]  Computing onsets... 78% (frame 2000/2552, flux: 280.713)
-[5:19:26 PM]  Computing onsets... 86% (frame 2200/2552, flux: 70.103)
-[5:19:26 PM]  Computing onsets... 94% (frame 2400/2552, flux: 1.412)
-[5:19:27 PM] 📊 Onset envelope: max flux = 1376.387
-[5:19:27 PM] ✅ Onset envelope computed: 2552 frames
-[5:19:27 PM] 📈 Onset stats: max=1376.387, avg=228.608
-[5:19:27 PM] 🎵 Step 2: Finding global tempo candidates...
-[5:19:27 PM] 🔍 Searching tempo range: 70-180 BPM
-[5:19:27 PM] 📊 Autocorrelation: 31 to 80 lag frames (50 calculations)
-[5:19:27 PM] ⚡ Using RAW autocorrelation scores only - no arbitrary musical boosts
-[5:19:27 PM]  Autocorr 0%: lag=31 → 181.5 BPM (corr: 0.6889)
-[5:19:27 PM]  Autocorr 40%: lag=51 → 110.3 BPM (corr: 0.6132)
-[5:19:27 PM]  Autocorr 80%: lag=71 → 79.2 BPM (corr: 0.6396)
-[5:19:27 PM] 🎯 Finding tempo peaks with musical constraints...
-[5:19:27 PM] 📈 Raw autocorrelation peaks:
-[5:19:27 PM]  1. 95.3 BPM (score: 0.7225)
-[5:19:27 PM]  2. 93.8 BPM (score: 0.7118)
-[5:19:27 PM]  3. 125.0 BPM (score: 0.7093)
-[5:19:27 PM]  4. 97.0 BPM (score: 0.7007)
-[5:19:27 PM]  5. 76.0 BPM (score: 0.6993)
-[5:19:27 PM]  6. 127.8 BPM (score: 0.6982)
-[5:19:27 PM]  7. 181.5 BPM (score: 0.6889)
-[5:19:27 PM]  8. 77.1 BPM (score: 0.6807)
-[5:19:27 PM]  9. 92.2 BPM (score: 0.6771)
-[5:19:27 PM]  10. 175.8 BPM (score: 0.6745)
-[5:19:27 PM] 🎵 Final ranking by RAW autocorrelation only (no boosts):
-[5:19:27 PM]  1. 95.3 BPM (raw score: 0.7225) 👑
-[5:19:27 PM]  2. 93.8 BPM (raw score: 0.7118)
-[5:19:27 PM]  3. 125.0 BPM (raw score: 0.7093)
-[5:19:27 PM]  4. 97.0 BPM (raw score: 0.7007)
-[5:19:27 PM]  5. 76.0 BPM (raw score: 0.6993)
-[5:19:27 PM] 📊 Confidence calculation: best=0.7225, avg=0.6434 → 12.7%
-[5:19:27 PM] 🎯 Global tempo: 95.3 BPM (confidence: 12.7%)
-[5:19:27 PM] 🔍 Best correlation score: 0.7225
-[5:19:27 PM] 📊 Top tempo candidates:
-[5:19:27 PM]  1. 95.3 BPM (score: 0.7225)
-[5:19:27 PM]  2. 93.8 BPM (score: 0.7118)
-[5:19:27 PM]  3. 125.0 BPM (score: 0.7093)
-[5:19:27 PM]  4. 97.0 BPM (score: 0.7007)
-[5:19:27 PM]  5. 76.0 BPM (score: 0.6993)
-[5:19:27 PM] 🎵 Step 3: Computing Fourier tempogram for detailed tempo analysis...
-[5:19:27 PM] 🔧 Tempogram setup: winLength=384, hopFrames=96
-[5:19:27 PM] 📊 Computing 23 tempogram frames...
-[5:19:27 PM]  Tempogram 0%: frame 0/23 (energy: 6137627.003)
-[5:19:27 PM]  Tempogram 9%: frame 2/23 (energy: 14334959.415)
-[5:19:27 PM]  Tempogram 17%: frame 4/23 (energy: 16295708.038)
-[5:19:27 PM]  Tempogram 26%: frame 6/23 (energy: 17220854.446)
-[5:19:27 PM]  Tempogram 35%: frame 8/23 (energy: 18005658.746)
-[5:19:27 PM]  Tempogram 43%: frame 10/23 (energy: 18591260.226)
-[5:19:27 PM]  Tempogram 52%: frame 12/23 (energy: 15190225.291)
-[5:19:27 PM]  Tempogram 61%: frame 14/23 (energy: 17157380.604)
-[5:19:27 PM]  Tempogram 70%: frame 16/23 (energy: 13793223.542)
-[5:19:27 PM]  Tempogram 78%: frame 18/23 (energy: 14890483.003)
-[5:19:27 PM]  Tempogram 87%: frame 20/23 (energy: 13755357.289)
-[5:19:27 PM]  Tempogram 96%: frame 22/23 (energy: 3191019.397)
-[5:19:27 PM] 🎼 Tempo frequency range: 14.6-2812.5 BPM
-[5:19:27 PM] 📈 Tempogram analysis complete:
-[5:19:27 PM]  Dominant frequencies found: 3
-[5:19:27 PM]  Total energy: 15992708.061
-[5:19:27 PM]  Peak energy ratio: 0.1%
-[5:19:27 PM] 📈 Tempogram computed: 23 time frames, 193 tempo frequencies
-[5:19:27 PM] 🎯 Tempogram tempo range: 14.6-2812.5 BPM
-[5:19:27 PM] 📊 Peak tempo energies in tempogram:
-[5:19:27 PM]  1. 190.4 BPM (energy: 7808.4053, frames: 20)
-[5:19:27 PM]  2. 146.5 BPM (energy: 6356.6172, frames: 20)
-[5:19:27 PM]  3. 102.5 BPM (energy: 4848.9971, frames: 19)
-[5:19:27 PM] 🎵 Step 4: Analyzing tempo stability over time...
-[5:19:27 PM] ⚙️ Window analysis: 23 windows, 4s each, 1s hops
-[5:19:27 PM]  [0] WIDE constraint: 60.0-145.3 BPM (±50 around global 95.3)
-[5:19:27 PM]  [0] Onset energy: 746 frames, avg=5.060, max=19.774
-[5:19:27 PM]  [0] Checking lags 77-187 for ALL tempo candidates...
-[5:19:27 PM]  [0] Top correlations in window (all candidates):
-[5:19:27 PM]  146.1 BPM: 0.5449 
-[5:19:27 PM]  144.2 BPM: 0.5409 👑
-[5:19:27 PM]  142.4 BPM: 0.5376 
-[5:19:27 PM]  140.6 BPM: 0.5345 
-[5:19:27 PM]  138.9 BPM: 0.5321 
-[5:19:27 PM]  [0] Selected: 144.2 BPM (correlation: 0.5409)
-[5:19:27 PM] [00] t=0.0s → 144.2 BPM (+48.9) ❌ (corr: 0.541)
-[5:19:27 PM]  [1] WIDE constraint: 60.0-145.3 BPM (±50 around global 95.3)
-[5:19:27 PM]  [1] Onset energy: 746 frames, avg=5.598, max=19.978
-[5:19:27 PM]  [1] Checking lags 77-187 for ALL tempo candidates...
-[5:19:27 PM]  [1] Top correlations in window (all candidates):
-[5:19:27 PM]  126.4 BPM: 0.7723 👑
-[5:19:27 PM]  127.8 BPM: 0.7717 
-[5:19:27 PM]  129.3 BPM: 0.7706 
-[5:19:27 PM]  125.0 BPM: 0.7701 
-[5:19:27 PM]  130.8 BPM: 0.7688 
-[5:19:27 PM]  [1] Selected: 126.4 BPM (correlation: 0.7723)
-[5:19:27 PM] [01] t=1.0s → 126.4 BPM (+31.1) ❌ (corr: 0.772)
-[5:19:27 PM]  [2] WIDE constraint: 60.0-145.3 BPM (±50 around global 95.3)
-[5:19:27 PM]  [2] Onset energy: 746 frames, avg=7.334, max=19.791
-[5:19:27 PM]  [2] Checking lags 77-187 for ALL tempo candidates...
-[5:19:27 PM]  [2] Top correlations in window (all candidates):
-[5:19:27 PM]  126.4 BPM: 0.8428 👑
-[5:19:27 PM]  125.0 BPM: 0.8416 
-[5:19:27 PM]  127.8 BPM: 0.8413 
-[5:19:27 PM]  129.3 BPM: 0.8387 
-[5:19:27 PM]  123.6 BPM: 0.8380 
-[5:19:27 PM]  [2] Selected: 126.4 BPM (correlation: 0.8428)
-[5:19:27 PM] [02] t=2.0s → 126.4 BPM (+31.1) ❌ (corr: 0.843)
-[5:19:27 PM]  [3] WIDE constraint: 60.0-145.3 BPM (±50 around global 95.3)
-[5:19:27 PM]  [3] Onset energy: 746 frames, avg=8.282, max=20.214
-[5:19:27 PM]  [3] Checking lags 77-187 for ALL tempo candidates...
-[5:19:27 PM]  [3] Top correlations in window (all candidates):
-[5:19:27 PM]  126.4 BPM: 0.8281 👑
-[5:19:27 PM]  125.0 BPM: 0.8280 
-[5:19:27 PM]  127.8 BPM: 0.8258 
-[5:19:27 PM]  123.6 BPM: 0.8252 
-[5:19:27 PM]  129.3 BPM: 0.8223 
-[5:19:27 PM]  [3] Selected: 126.4 BPM (correlation: 0.8281)
-[5:19:27 PM] [03] t=3.0s → 126.4 BPM (+31.1) ❌ (corr: 0.828)
-[5:19:27 PM]  [4] WIDE constraint: 60.0-145.3 BPM (±50 around global 95.3)
-[5:19:27 PM]  [4] Onset energy: 746 frames, avg=8.855, max=19.989
-[5:19:27 PM]  [4] Checking lags 77-187 for ALL tempo candidates...
-[5:19:27 PM]  [4] Top correlations in window (all candidates):
-[5:19:27 PM]  126.4 BPM: 0.9356 👑
-[5:19:27 PM]  125.0 BPM: 0.9355 
-[5:19:27 PM]  127.8 BPM: 0.9326 
-[5:19:27 PM]  123.6 BPM: 0.9326 
-[5:19:27 PM]  129.3 BPM: 0.9285 
-[5:19:27 PM]  [4] Selected: 126.4 BPM (correlation: 0.9356)
-[5:19:27 PM] [04] t=4.0s → 126.4 BPM (+31.1) ❌ (corr: 0.936)
-[5:19:27 PM]  [5] WIDE constraint: 60.0-145.3 BPM (±50 around global 95.3)
-[5:19:27 PM]  [5] Onset energy: 746 frames, avg=9.222, max=20.214
-[5:19:27 PM]  [5] Checking lags 77-187 for ALL tempo candidates...
-[5:19:27 PM]  [5] Top correlations in window (all candidates):
-[5:19:27 PM]  126.4 BPM: 0.7951 👑
-[5:19:27 PM]  127.8 BPM: 0.7951 
-[5:19:27 PM]  129.3 BPM: 0.7946 
-[5:19:27 PM]  125.0 BPM: 0.7932 
-[5:19:27 PM]  130.8 BPM: 0.7932 
-[5:19:27 PM]  [5] Selected: 126.4 BPM (correlation: 0.7951)
-[5:19:27 PM] [05] t=5.0s → 126.4 BPM (+31.1) ❌ (corr: 0.795)
-[5:19:27 PM]  [6] WIDE constraint: 60.0-145.3 BPM (±50 around global 95.3)
-[5:19:27 PM]  [6] Onset energy: 746 frames, avg=8.243, max=19.989
-[5:19:27 PM]  [6] Checking lags 77-187 for ALL tempo candidates...
-[5:19:27 PM]  [6] Top correlations in window (all candidates):
-[5:19:27 PM]  126.4 BPM: 0.8169 👑
-[5:19:27 PM]  127.8 BPM: 0.8163 
-[5:19:27 PM]  125.0 BPM: 0.8156 
-[5:19:27 PM]  129.3 BPM: 0.8145 
-[5:19:27 PM]  123.6 BPM: 0.8130 
-[5:19:27 PM]  [6] Selected: 126.4 BPM (correlation: 0.8169)
-[5:19:27 PM] [06] t=6.0s → 126.4 BPM (+31.1) ❌ (corr: 0.817)
-[5:19:27 PM]  [7] WIDE constraint: 60.0-145.3 BPM (±50 around global 95.3)
-[5:19:27 PM]  [7] Onset energy: 746 frames, avg=8.690, max=19.909
-[5:19:27 PM]  [7] Checking lags 77-187 for ALL tempo candidates...
-[5:19:27 PM]  [7] Top correlations in window (all candidates):
-[5:19:27 PM]  126.4 BPM: 0.8126 👑
-[5:19:27 PM]  127.8 BPM: 0.8118 
-[5:19:27 PM]  125.0 BPM: 0.8117 
-[5:19:27 PM]  129.3 BPM: 0.8100 
-[5:19:27 PM]  123.6 BPM: 0.8090 
-[5:19:27 PM]  [7] Selected: 126.4 BPM (correlation: 0.8126)
-[5:19:27 PM] [07] t=7.0s → 126.4 BPM (+31.1) ❌ (corr: 0.813)
-[5:19:27 PM]  [8] WIDE constraint: 60.0-145.3 BPM (±50 around global 95.3)
-[5:19:27 PM]  [8] Onset energy: 746 frames, avg=8.259, max=19.441
-[5:19:27 PM]  [8] Checking lags 77-187 for ALL tempo candidates...
-[5:19:27 PM]  [8] Top correlations in window (all candidates):
-[5:19:27 PM]  62.8 BPM: 0.7500 👑
-[5:19:27 PM]  62.5 BPM: 0.7499 
-[5:19:27 PM]  62.2 BPM: 0.7491 
-[5:19:27 PM]  63.2 BPM: 0.7491 
-[5:19:27 PM]  61.8 BPM: 0.7481 
-[5:19:27 PM]  [8] Selected: 62.8 BPM (correlation: 0.7500)
-[5:19:27 PM] [08] t=8.0s → 62.8 BPM (+-32.5) ❌ (corr: 0.750)
-[5:19:27 PM]  [9] WIDE constraint: 60.0-145.3 BPM (±50 around global 95.3)
-[5:19:27 PM]  [9] Onset energy: 746 frames, avg=8.586, max=19.909
-[5:19:27 PM]  [9] Checking lags 77-187 for ALL tempo candidates...
-[5:19:27 PM]  [9] Top correlations in window (all candidates):
-[5:19:27 PM]  62.8 BPM: 0.8769 👑
-[5:19:27 PM]  63.2 BPM: 0.8765 
-[5:19:27 PM]  62.5 BPM: 0.8758 
-[5:19:27 PM]  63.6 BPM: 0.8752 
-[5:19:27 PM]  62.2 BPM: 0.8745 
-[5:19:27 PM]  [9] Selected: 62.8 BPM (correlation: 0.8769)
-[5:19:27 PM] [09] t=9.0s → 62.8 BPM (+-32.5) ❌ (corr: 0.877)
-[5:19:27 PM]  [10] WIDE constraint: 60.0-145.3 BPM (±50 around global 95.3)
-[5:19:27 PM]  [10] Onset energy: 746 frames, avg=9.374, max=19.441
-[5:19:27 PM]  [10] Checking lags 77-187 for ALL tempo candidates...
-[5:19:27 PM]  [10] Top correlations in window (all candidates):
-[5:19:27 PM]  146.1 BPM: 0.7810 
-[5:19:27 PM]  144.2 BPM: 0.7794 👑
-[5:19:27 PM]  135.5 BPM: 0.7782 
-[5:19:27 PM]  142.4 BPM: 0.7782 
-[5:19:27 PM]  137.2 BPM: 0.7781 
-[5:19:27 PM]  [10] Selected: 144.2 BPM (correlation: 0.7794)
-[5:19:27 PM] [10] t=10.0s → 144.2 BPM (+48.9) ❌ (corr: 0.779)
-[5:19:27 PM]  [11] WIDE constraint: 60.0-145.3 BPM (±50 around global 95.3)
-[5:19:27 PM]  [11] Onset energy: 746 frames, avg=8.400, max=19.625
-[5:19:27 PM]  [11] Checking lags 77-187 for ALL tempo candidates...
-[5:19:27 PM]  [11] Top correlations in window (all candidates):
-[5:19:27 PM]  127.8 BPM: 0.8049 👑
-[5:19:27 PM]  126.4 BPM: 0.8045 
-[5:19:27 PM]  129.3 BPM: 0.8044 
-[5:19:27 PM]  125.0 BPM: 0.8038 
-[5:19:27 PM]  130.8 BPM: 0.8034 
-[5:19:27 PM]  [11] Selected: 127.8 BPM (correlation: 0.8049)
-[5:19:27 PM] [11] t=11.0s → 127.8 BPM (+32.5) ❌ (corr: 0.805)
-[5:19:27 PM]  [12] WIDE constraint: 60.0-145.3 BPM (±50 around global 95.3)
-[5:19:27 PM]  [12] Onset energy: 746 frames, avg=8.431, max=19.836
-[5:19:27 PM]  [12] Checking lags 77-187 for ALL tempo candidates...
-[5:19:27 PM]  [12] Top correlations in window (all candidates):
-[5:19:27 PM]  126.4 BPM: 0.8098 👑
-[5:19:27 PM]  127.8 BPM: 0.8090 
-[5:19:27 PM]  125.0 BPM: 0.8086 
-[5:19:27 PM]  129.3 BPM: 0.8077 
-[5:19:27 PM]  123.6 BPM: 0.8059 
-[5:19:27 PM]  [12] Selected: 126.4 BPM (correlation: 0.8098)
-[5:19:27 PM] [12] t=12.0s → 126.4 BPM (+31.1) ❌ (corr: 0.810)
-[5:19:27 PM]  [13] WIDE constraint: 60.0-145.3 BPM (±50 around global 95.3)
-[5:19:27 PM]  [13] Onset energy: 746 frames, avg=8.119, max=19.987
-[5:19:27 PM]  [13] Checking lags 77-187 for ALL tempo candidates...
-[5:19:27 PM]  [13] Top correlations in window (all candidates):
-[5:19:27 PM]  62.8 BPM: 0.8097 👑
-[5:19:27 PM]  63.2 BPM: 0.8097 
-[5:19:28 PM]  63.6 BPM: 0.8076 
-[5:19:28 PM]  62.5 BPM: 0.8076 
-[5:19:28 PM]  63.9 BPM: 0.8043 
-[5:19:28 PM]  [13] Selected: 62.8 BPM (correlation: 0.8097)
-[5:19:28 PM] [13] t=13.0s → 62.8 BPM (+-32.5) ❌ (corr: 0.810)
-[5:19:28 PM]  [14] WIDE constraint: 60.0-145.3 BPM (±50 around global 95.3)
-[5:19:28 PM]  [14] Onset energy: 746 frames, avg=7.908, max=19.836
-[5:19:28 PM]  [14] Checking lags 77-187 for ALL tempo candidates...
-[5:19:28 PM]  [14] Top correlations in window (all candidates):
-[5:19:28 PM]  62.5 BPM: 0.8339 👑
-[5:19:28 PM]  62.8 BPM: 0.8334 
-[5:19:28 PM]  62.2 BPM: 0.8331 
-[5:19:28 PM]  61.8 BPM: 0.8312 
-[5:19:28 PM]  63.2 BPM: 0.8302 
-[5:19:28 PM]  [14] Selected: 62.5 BPM (correlation: 0.8339)
-[5:19:28 PM] [14] t=14.0s → 62.5 BPM (+-32.8) ❌ (corr: 0.834)
-[5:19:28 PM]  [15] WIDE constraint: 60.0-145.3 BPM (±50 around global 95.3)
-[5:19:28 PM]  [15] Onset energy: 746 frames, avg=7.772, max=19.987
-[5:19:28 PM]  [15] Checking lags 77-187 for ALL tempo candidates...
-[5:19:28 PM]  [15] Top correlations in window (all candidates):
-[5:19:28 PM]  62.5 BPM: 0.6992 👑
-[5:19:28 PM]  62.8 BPM: 0.6988 
-[5:19:28 PM]  62.2 BPM: 0.6985 
-[5:19:28 PM]  63.2 BPM: 0.6964 
-[5:19:28 PM]  61.8 BPM: 0.6961 
-[5:19:28 PM]  [15] Selected: 62.5 BPM (correlation: 0.6992)
-[5:19:28 PM] [15] t=15.0s → 62.5 BPM (+-32.8) ❌ (corr: 0.699)
-[5:19:28 PM]  [16] WIDE constraint: 60.0-145.3 BPM (±50 around global 95.3)
-[5:19:28 PM]  [16] Onset energy: 746 frames, avg=7.160, max=19.833
-[5:19:28 PM]  [16] Checking lags 77-187 for ALL tempo candidates...
-[5:19:28 PM]  [16] Top correlations in window (all candidates):
-[5:19:28 PM]  125.0 BPM: 0.7467 👑
-[5:19:28 PM]  123.6 BPM: 0.7457 
-[5:19:28 PM]  126.4 BPM: 0.7456 
-[5:19:28 PM]  122.3 BPM: 0.7444 
-[5:19:28 PM]  127.8 BPM: 0.7426 
-[5:19:28 PM]  [16] Selected: 125.0 BPM (correlation: 0.7467)
-[5:19:28 PM] [16] t=16.0s → 125.0 BPM (+29.7) ❌ (corr: 0.747)
-[5:19:28 PM]  [17] WIDE constraint: 60.0-145.3 BPM (±50 around global 95.3)
-[5:19:28 PM]  [17] Onset energy: 746 frames, avg=6.957, max=19.750
-[5:19:28 PM]  [17] Checking lags 77-187 for ALL tempo candidates...
-[5:19:28 PM]  [17] Top correlations in window (all candidates):
-[5:19:28 PM]  63.6 BPM: 0.7879 👑
-[5:19:28 PM]  63.2 BPM: 0.7876 
-[5:19:28 PM]  63.9 BPM: 0.7875 
-[5:19:28 PM]  64.3 BPM: 0.7868 
-[5:19:28 PM]  62.8 BPM: 0.7856 
-[5:19:28 PM]  [17] Selected: 63.6 BPM (correlation: 0.7879)
-[5:19:28 PM] [17] t=17.0s → 63.6 BPM (+-31.8) ❌ (corr: 0.788)
-[5:19:28 PM]  [18] WIDE constraint: 60.0-145.3 BPM (±50 around global 95.3)
-[5:19:28 PM]  [18] Onset energy: 746 frames, avg=6.364, max=19.833
-[5:19:28 PM]  [18] Checking lags 77-187 for ALL tempo candidates...
-[5:19:28 PM]  [18] Top correlations in window (all candidates):
-[5:19:28 PM]  62.8 BPM: 0.7439 👑
-[5:19:28 PM]  62.5 BPM: 0.7433 
-[5:19:28 PM]  63.2 BPM: 0.7422 
-[5:19:28 PM]  62.2 BPM: 0.7399 
-[5:19:28 PM]  63.6 BPM: 0.7391 
-[5:19:28 PM]  [18] Selected: 62.8 BPM (correlation: 0.7439)
-[5:19:28 PM] [18] t=18.0s → 62.8 BPM (+-32.5) ❌ (corr: 0.744)
-[5:19:28 PM]  [19] WIDE constraint: 60.0-145.3 BPM (±50 around global 95.3)
-[5:19:28 PM]  [19] Onset energy: 746 frames, avg=7.075, max=19.587
-[5:19:28 PM]  [19] Checking lags 77-187 for ALL tempo candidates...
-[5:19:28 PM]  [19] Top correlations in window (all candidates):
-[5:19:28 PM]  63.2 BPM: 0.8911 👑
-[5:19:28 PM]  63.6 BPM: 0.8910 
-[5:19:28 PM]  63.9 BPM: 0.8900 
-[5:19:28 PM]  62.8 BPM: 0.8894 
-[5:19:28 PM]  64.3 BPM: 0.8879 
-[5:19:28 PM]  [19] Selected: 63.2 BPM (correlation: 0.8911)
-[5:19:28 PM] [19] t=19.0s → 63.2 BPM (+-32.1) ❌ (corr: 0.891)
-[5:19:28 PM]  [20] WIDE constraint: 60.0-145.3 BPM (±50 around global 95.3)
-[5:19:28 PM]  [20] Onset energy: 746 frames, avg=7.399, max=18.781
-[5:19:28 PM]  [20] Checking lags 77-187 for ALL tempo candidates...
-[5:19:28 PM]  [20] Top correlations in window (all candidates):
-[5:19:28 PM]  146.1 BPM: 0.8049 
-[5:19:28 PM]  144.2 BPM: 0.8003 👑
-[5:19:28 PM]  142.4 BPM: 0.7967 
-[5:19:28 PM]  140.6 BPM: 0.7931 
-[5:19:28 PM]  138.9 BPM: 0.7894 
-[5:19:28 PM]  [20] Selected: 144.2 BPM (correlation: 0.8003)
-[5:19:28 PM] [20] t=20.0s → 144.2 BPM (+48.9) ❌ (corr: 0.800)
-[5:19:28 PM]  [21] WIDE constraint: 60.0-145.3 BPM (±50 around global 95.3)
-[5:19:28 PM]  [21] Onset energy: 746 frames, avg=6.196, max=17.815
-[5:19:28 PM]  [21] Checking lags 77-187 for ALL tempo candidates...
-[5:19:28 PM]  [21] Top correlations in window (all candidates):
-[5:19:28 PM]  146.1 BPM: 0.8325 
-[5:19:28 PM]  144.2 BPM: 0.8295 👑
-[5:19:28 PM]  142.4 BPM: 0.8271 
-[5:19:28 PM]  140.6 BPM: 0.8244 
-[5:19:28 PM]  138.9 BPM: 0.8213 
-[5:19:28 PM]  [21] Selected: 144.2 BPM (correlation: 0.8295)
-[5:19:28 PM] [21] t=21.0s → 144.2 BPM (+48.9) ❌ (corr: 0.830)
-[5:19:28 PM]  [22] WIDE constraint: 60.0-145.3 BPM (±50 around global 95.3)
-[5:19:28 PM]  [22] Onset energy: 746 frames, avg=4.998, max=18.026
-[5:19:28 PM]  [22] Checking lags 77-187 for ALL tempo candidates...
-[5:19:28 PM]  [22] Top correlations in window (all candidates):
-[5:19:28 PM]  146.1 BPM: 0.8103 
-[5:19:28 PM]  144.2 BPM: 0.8070 👑
-[5:19:28 PM]  142.4 BPM: 0.8042 
-[5:19:28 PM]  140.6 BPM: 0.8010 
-[5:19:28 PM]  138.9 BPM: 0.7974 
-[5:19:28 PM]  [22] Selected: 144.2 BPM (correlation: 0.8070)
-[5:19:28 PM] [22] t=22.0s → 144.2 BPM (+48.9) ❌ (corr: 0.807)
-[5:19:28 PM] ✅ Analysis completed in 9.8s
-[5:19:28 PM] 🎯 GLOBAL TEMPO: 95.3 BPM (12.7% confidence)
-[5:19:28 PM] 🏆 Final global tempo candidates (raw autocorrelation only):
-[5:19:28 PM]  1. 95.3 BPM (score: 0.7225) 👑
-[5:19:28 PM]  2. 93.8 BPM (score: 0.7118) 
-[5:19:28 PM]  3. 125.0 BPM (score: 0.7093) 
-[5:19:28 PM]  4. 97.0 BPM (score: 0.7007) 
-[5:19:28 PM]  5. 76.0 BPM (score: 0.6993) 
-[5:19:28 PM] 📈 FOURIER TEMPOGRAM ANALYSIS:
-[5:19:28 PM]  Time-frequency resolution: 23 frames × 193 frequencies
-[5:19:28 PM]  Total spectral energy: 15992708.061
-[5:19:28 PM]  Energy distribution:
-[5:19:28 PM] 🎼 TEMPOGRAM PEAK TEMPOS (spectral analysis):
-[5:19:28 PM]  1. 190.4 BPM (energy: 7808.4053, frames: 20/23 frames, 16.1%) 
-[5:19:28 PM]  2. 146.5 BPM (energy: 6356.6172, frames: 20/23 frames, 13.1%) 
-[5:19:28 PM]  3. 102.5 BPM (energy: 4848.9971, frames: 19/23 frames, 10.0%) 
-[5:19:28 PM] 🔍 Method agreement: Global=95.3 vs Tempogram=190.4 BPM (±95.1)
-[5:19:28 PM] ❌ DISAGREEMENT: Methods differ by >15 BPM - complex tempo
-[5:19:28 PM] 📊 TEMPO STABILITY ANALYSIS:
-[5:19:28 PM]  Average deviation: ±35.4 BPM
-[5:19:28 PM]  Maximum deviation: ±48.9 BPM
-[5:19:28 PM]  Stability windows: 0/23 stable (±5 BPM)
-[5:19:28 PM] 📈 WINDOW-BY-WINDOW SUMMARY:
-[5:19:28 PM]  ✅ Stable (±5 BPM): 0 windows
-[5:19:28 PM]    ⚠️ Moderate (5-15 BPM): 0 windows
-[5:19:28 PM]    ❌ Unstable (>15 BPM): 23 windows
-[5:19:28 PM] 🎵 Performing beat tracking (reusing onset envelope)...
-[5:19:28 PM] 🥁 Beat tracking completed: 33 beats detected
-[5:19:28 PM] 🎵 Generating click track for verification...
-[5:19:28 PM] ✅ Click track generated successfully
-[5:19:28 PM] 🎉 FINAL RESULT:
-[5:19:28 PM]  ❓ LOW CONFIDENCE: Complex/ambiguous tempo, best guess 95.3 BPM
-[5:19:28 PM] ❌ Analysis failed: Can't find variable: stabilityStatus
+[5:45:15 PM] 🔍 Starting BPM analysis
+[5:45:15 PM] Audio: 151,579 samples (3.2s)
+[5:45:15 PM] Window: 4s, Hop: 1s
+[5:45:15 PM] 🎵 Step 1: Computing onset strength for entire track...
+[5:45:15 PM] 📊 Track info: 151,579 samples, 3.2s duration
+[5:45:15 PM] 🔧 Onset computation: 293 frames, 2048 frame size, 512 hop
+[5:45:15 PM]  Computing onsets... 0% (frame 0/293, flux: 0.000)
+[5:45:15 PM]  Computing onsets... 68% (frame 200/293, flux: 21.093)
+[5:45:16 PM] 📊 Onset envelope: max flux = 887.428
+[5:45:16 PM] ✅ Onset envelope computed: 293 frames
+[5:45:16 PM] 📈 Onset stats: max=887.428, avg=77.146
+[5:45:16 PM] 🎵 Step 2: Finding global tempo candidates...
+[5:45:16 PM] 🔍 Searching tempo range: 70-180 BPM
+[5:45:16 PM] 📊 Autocorrelation: 31 to 80 lag frames (50 calculations)
+[5:45:16 PM] ⚡ Using RAW autocorrelation scores only - no arbitrary musical boosts
+[5:45:16 PM]  Autocorr 0%: lag=31 → 181.5 BPM (corr: 0.1851)
+[5:45:16 PM]  Autocorr 40%: lag=51 → 110.3 BPM (corr: 0.3999)
+[5:45:16 PM]  Autocorr 80%: lag=71 → 79.2 BPM (corr: 0.2441)
+[5:45:16 PM] 🎯 Finding tempo peaks with musical constraints...
+[5:45:16 PM] 📈 Raw autocorrelation peaks:
+[5:45:16 PM]  1. 76.0 BPM (score: 0.7494)
+[5:45:16 PM]  2. 152.0 BPM (score: 0.7057)
+[5:45:16 PM]  3. 77.1 BPM (score: 0.5769)
+[5:45:16 PM]  4. 148.0 BPM (score: 0.5567)
+[5:45:16 PM]  5. 156.3 BPM (score: 0.5297)
+[5:45:16 PM]  6. 75.0 BPM (score: 0.5221)
+[5:45:16 PM]  7. 114.8 BPM (score: 0.5205)
+[5:45:16 PM]  8. 112.5 BPM (score: 0.5075)
+[5:45:16 PM]  9. 117.2 BPM (score: 0.4347)
+[5:45:16 PM]  10. 90.7 BPM (score: 0.4214)
+[5:45:16 PM] 🎵 Final ranking by RAW autocorrelation only (no boosts):
+[5:45:16 PM]  1. 76.0 BPM (raw score: 0.7494) 👑
+[5:45:16 PM]  2. 152.0 BPM (raw score: 0.7057)
+[5:45:16 PM]  3. 77.1 BPM (raw score: 0.5769)
+[5:45:16 PM]  4. 148.0 BPM (raw score: 0.5567)
+[5:45:16 PM]  5. 156.3 BPM (raw score: 0.5297)
+[5:45:16 PM] 📊 Confidence calculation: best=0.7494, avg=0.3160 → 94.6%
+[5:45:16 PM] 🎯 Global tempo: 76.0 BPM (confidence: 94.6%)
+[5:45:16 PM] 🔍 Best correlation score: 0.7494
+[5:45:16 PM] 📊 Top tempo candidates:
+[5:45:16 PM]  1. 76.0 BPM (score: 0.7494)
+[5:45:16 PM]  2. 152.0 BPM (score: 0.7057)
+[5:45:16 PM]  3. 77.1 BPM (score: 0.5769)
+[5:45:16 PM]  4. 148.0 BPM (score: 0.5567)
+[5:45:16 PM]  5. 156.3 BPM (score: 0.5297)
+[5:45:16 PM] 🎵 Step 3: Computing Fourier tempogram for detailed tempo analysis...
+[5:45:16 PM] 🔧 Tempogram setup: winLength=384, hopFrames=96
+[5:45:16 PM] 📊 Computing 0 tempogram frames...
+[5:45:16 PM] 🎼 Tempo frequency range: 14.6-2812.5 BPM
+[5:45:16 PM] ❌ Analysis failed: undefined is not an object (evaluating 'tempogram[0].length')
+[5:45:17 PM] 🎵 Live: 112.5 BPM (-7.5) at 0.2s
+[5:45:18 PM] 🎵 Live: 114.8 BPM (-5.2) at 1.7s
+[5:45:20 PM] 🎵 Live: 114.8 BPM (-5.2) at 0.0s
+[5:45:22 PM] 🎵 Live: 114.8 BPM (-5.2) at 2.0s
+[5:45:23 PM] 🎵 Live: 112.5 BPM (-7.5) at 0.4s
+[5:45:25 PM] 🎵 Live: 137.2 BPM (+17.2) at 1.9s
+[5:45:26 PM] 🎵 Live: 112.5 BPM (-7.5) at 0.2s
+[5:45:28 PM] 🎵 Live: 114.8 BPM (-5.2) at 1.7s
+[5:45:29 PM] 🎵 Live: 112.5 BPM (-7.5) at 0.1s
+[5:45:31 PM] 🎵 Live: 114.8 BPM (-5.2) at 1.6s
+[5:45:32 PM] ⏹️ Audio playback stopped
+[5:45:32 PM] ⏹️ Live BPM tracking stopped
+[5:46:14 PM] 🎤 Live audio analysis setup complete
+[5:46:14 PM] ▶️ Audio playback started
+[5:46:14 PM] 🎯 Enhanced live BPM tracking started (DAW-style)
+[5:46:16 PM] 🎵 Live: 114.8 BPM (-5.2) at 1.5s
+[5:46:17 PM] 🎵 Live: 112.5 BPM (-7.5) at 3.0s
+[5:46:17 PM] ⏹️ Audio playback stopped
+[5:46:17 PM] ⏹️ Live BPM tracking stopped
+[5:46:26 PM] 🎤 Live audio analysis setup complete
+[5:46:26 PM] ▶️ Audio playback started
+[5:46:26 PM] 🎯 Enhanced live BPM tracking started (DAW-style)
+[5:46:27 PM] ⏹️ Audio playback stopped
+[5:46:27 PM] ⏹️ Live BPM tracking stopped

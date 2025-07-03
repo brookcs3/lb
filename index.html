@@ -60,21 +60,25 @@
       try {
         clearLog();
         logMessage("Loading audio file...");
-        
-        // Clear previous analysis data
-        clickBuffer = null;
-        beatTimes = null;
-        globalTempo = 120;
-        clickBtn.disabled = true;
-        clickEnabled = false;
-        clickBtn.textContent = "🔇 Click Track";
-        
-        audioContext = new AudioContext();
+        // Try to detect the file's native sample rate first
+        // Common sample rates: 44100, 48000, 88200, 96000
+        if (!audioContext || audioContext.state === 'closed') {
+          try {
+            // Try 48kHz first (most common for modern files)
+            audioContext = new AudioContext({ sampleRate: 48000 });
+            logMessage(`📻 Created AudioContext at 48kHz`);
+          } catch (e) {
+            // Fallback to system default
+            audioContext = new AudioContext();
+            logMessage(`📻 Created AudioContext at system rate: ${audioContext.sampleRate}Hz`);
+          }
+        }
         const arrayBuffer = await file.arrayBuffer();
         audioBuffer = await audioContext.decodeAudioData(arrayBuffer);
         bpmDisplay.textContent = "BPM: --";
         logMessage("✅ Audio file loaded successfully");
         logMessage(`Duration: ${audioBuffer.duration.toFixed(1)}s, Sample Rate: ${audioBuffer.sampleRate}Hz`);
+        logMessage(`AudioContext Sample Rate: ${audioContext.sampleRate}Hz`);
         playBtn.disabled = false;
         analyzeBtn.disabled = false;
         collapseAllBtn.disabled = false;
@@ -180,6 +184,13 @@
           const { times, tempo, globalTempo: resultGlobalTempo, confidence, candidates, tempogram, onsetEnvelope } = result;
           logMessage(`✅ Analysis completed in ${analysisTime.toFixed(1)}s`);
           globalTempo = parseFloat(resultGlobalTempo.toFixed(1)); // Store for live tracking
+          
+          // Validate tempo is reasonable
+          if (isNaN(globalTempo) || globalTempo < 30 || globalTempo > 300) {
+            logMessage(`⚠️ Invalid tempo detected: ${globalTempo}, using default 120 BPM`);
+            globalTempo = 120;
+          }
+          
           logMessage(`🎯 GLOBAL TEMPO: ${globalTempo} BPM (${(confidence * 100).toFixed(1)}% confidence)`);
 
           logMessage(`🏆 Final global tempo candidates (raw autocorrelation only):`);
@@ -243,32 +254,10 @@
           });
           beatTimes = beatResult.beats;
           logMessage(`🥁 Beat tracking completed: ${beatTimes.length} beats detected`);
-          
-          // Debug: Calculate actual click tempo
-          if (beatTimes.length > 1) {
-            const avgInterval = (beatTimes[beatTimes.length - 1] - beatTimes[0]) / (beatTimes.length - 1);
-            const clickTempo = 60 / avgInterval;
-            logMessage(`🎵 Click track tempo: ${clickTempo.toFixed(1)} BPM (based on beat intervals)`);
-            logMessage(`📊 Expected tempo: ${globalTempo} BPM`);
-            if (Math.abs(clickTempo - globalTempo) > 5) {
-              logMessage(`⚠️ TEMPO MISMATCH: Click track will sound ${clickTempo < globalTempo ? 'slower' : 'faster'} than expected`);
-            }
-          }
 
           logMessage(`🎵 Generating click track for verification...`);
-          
-          // Fix tempo mismatch: Generate click track from BPM instead of beat times
-          const properBeatTimes = [];
-          const beatInterval = 60 / globalTempo; // Seconds per beat
-          for (let t = 0; t < audioBuffer.duration; t += beatInterval) {
-            properBeatTimes.push(t);
-          }
-          
-          clickBuffer = ui.generateClickTrack(properBeatTimes, audioBuffer.duration);
-          logMessage(`✅ Click track generated at ${globalTempo} BPM (${properBeatTimes.length} beats)`);
-          
-          // Keep original beatTimes for other uses, but use properBeatTimes for clicks
-          beatTimes = properBeatTimes;
+          clickBuffer = ui.generateClickTrack(beatTimes, audioBuffer.duration);
+          logMessage(`✅ Click track generated successfully`);
           clickBtn.disabled = false; // Enable click track button
 
           // Better status labeling
@@ -425,6 +414,37 @@
       const analysisInterval = 1.5; // Analyze every 1.5 seconds
       const windowSize = 2.0; // Use 2-second windows
       
+      // If no analysis has been run, do a quick analysis first
+      if (!beatTimes || beatTimes.length === 0) {
+        logMessage("🎵 Running quick beat analysis for live tracking...");
+        const y = audioBuffer.getChannelData(0);
+        const sr = audioBuffer.sampleRate;
+        
+        // Quick beat tracking
+        const quickResult = tracker.beatTrack({
+          y: y,
+          sr: sr,
+          units: 'time',
+          sparse: true
+        });
+        
+        beatTimes = quickResult.beats;
+        // Ensure globalTempo is a number, not an object
+        globalTempo = typeof quickResult.tempo === 'object' ? quickResult.tempo.bpm || quickResult.tempo : quickResult.tempo;
+        logMessage(`🎯 Quick analysis: ${globalTempo.toFixed(1)} BPM, ${beatTimes.length} beats`);
+        
+        // Generate click track for the detected beats
+        logMessage(`🎵 Generating click track...`);
+        clickBuffer = ui.generateClickTrack(beatTimes, audioBuffer.duration, 880, beatOffset);
+        if (clickBuffer) {
+          logMessage(`✅ Click track generated with ${beatTimes.length} clicks`);
+          clickBtn.disabled = false;
+        }
+        
+        // Update display
+        bpmDisplay.textContent = `BPM: ${globalTempo.toFixed(1)} (DETECTED)`;
+      }
+      
       bpmInterval = setInterval(async () => {
         const currentTime = audioContext.currentTime - startTime;
         const playbackTime = currentTime % audioBuffer.duration;
@@ -437,17 +457,21 @@
               const deviation = Math.abs(liveBpm - globalTempo);
               let liveStatus;
               
+              // Only update display if we're confident in the live reading
               if (deviation < 3) {
                 liveStatus = "LIVE ✅";
+                bpmDisplay.textContent = `BPM: ${globalTempo.toFixed(1)} (${liveStatus})`;
               } else if (deviation < 8) {
                 liveStatus = "LIVE ~";
+                // Show live BPM in log but keep display stable
+                bpmDisplay.textContent = `BPM: ${globalTempo.toFixed(1)} (${liveStatus})`;
               } else {
                 liveStatus = "LIVE ?";
+                // Don't update display for uncertain readings
+                bpmDisplay.textContent = `BPM: ${globalTempo.toFixed(1)} (TRACKING)`;
               }
               
               const deviationStr = deviation > 0.5 ? ` (${liveBpm > globalTempo ? '+' : ''}${(liveBpm - globalTempo).toFixed(1)})` : '';
-              
-              bpmDisplay.textContent = `BPM: ${liveBpm.toFixed(1)} (${liveStatus})`;
               logMessage(`🎵 Live: ${liveBpm.toFixed(1)} BPM${deviationStr} at ${playbackTime.toFixed(1)}s`);
             } else {
               // Fallback to interpolation if analysis fails
@@ -592,25 +616,9 @@
 
     // Fallback interpolation between beats
     function calculateInterpolatedBpm(currentTime) {
-      if (!beatTimes || beatTimes.length < 2) return globalTempo || "--";
-      
-      const playbackTime = currentTime % audioBuffer.duration;
-      let prevBeat = null, nextBeat = null;
-      
-      for (let i = 0; i < beatTimes.length; i++) {
-        if (beatTimes[i] <= playbackTime) prevBeat = beatTimes[i];
-        if (beatTimes[i] > playbackTime) {
-          nextBeat = beatTimes[i];
-          break;
-        }
-      }
-      
-      if (!prevBeat && nextBeat) prevBeat = beatTimes[beatTimes.length - 1];
-      if (!nextBeat && prevBeat) nextBeat = beatTimes[0];
-      if (!prevBeat || !nextBeat) return globalTempo || "--";
-      
-      const interval = nextBeat > prevBeat ? nextBeat - prevBeat : audioBuffer.duration - prevBeat + nextBeat;
-      return (60 / interval).toFixed(1);
+      // Always return the global tempo - don't try to interpolate
+      // This prevents the bouncing effect
+      return globalTempo ? globalTempo.toFixed(1) : "120";
     }
 
     // Stop live BPM tracking

@@ -1,0 +1,11 @@
+Scene ID: slide_01_intro  
+Title: Operation Start — Stop Cop City  
+Duration: 20s  
+
+Voiceover:  
+“Welcome to our digital security simulation.  
+Today, we're analyzing the Stop Cop City movement — a decentralized protest effort in Atlanta, Georgia.  
+We’ll explore the threats they face, and why CryptPad is a critical tool in their fight to stay safe, organized, and free.”
+
+Notes:  
+Tone = calm + cinematic, like a mission briefing. Pause after each sentence.  
