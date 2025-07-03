@@ -2,5 +2,6 @@
 /node_modules
 .DS_Store
 /claude-gemini-bridge
+/tempo example
 /plot_dynamic_beat
 /librosa-main
